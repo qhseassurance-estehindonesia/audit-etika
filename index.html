@@ -307,7 +307,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC66nxJC1MbK3EN34KOMGqcpPqYI_HCB9VRcrvS1d0wLIwuKQSjAVUQ33KMlTDffI3/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -437,12 +437,41 @@ const SECTION_LABELS = {
 
 // ── STATE ────────────────────────────────────────────────────
 let auditInfo      = {};
-let auditItems     = {}; // { code: { comply, catatan, fotoUrl } }
+let auditItems     = {};
 let currentSectionIdx = 0;
 const SECTION_KEYS = Object.keys(SECTION_LABELS);
+const STORAGE_KEY  = 'audit_etika_progress';
 
 // Inisialisasi semua item default = comply:true
 ITEMS.forEach(i => { auditItems[i.code] = { comply: true, catatan: '', fotoUrl: '' }; });
+
+// ── AUTO-SAVE & RESTORE ───────────────────────────────────────
+function saveProgress() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      auditInfo, auditItems, currentSectionIdx,
+      savedAt: new Date().toISOString()
+    }));
+  } catch(e) { /* ignore storage errors */ }
+}
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function clearProgress() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+}
+
+function timeSince(isoStr) {
+  const mins = Math.round((Date.now() - new Date(isoStr)) / 60000);
+  if (mins < 1)  return 'baru saja';
+  if (mins < 60) return mins + ' menit lalu';
+  return Math.round(mins/60) + ' jam lalu';
+}
 
 // ── SCREEN HELPERS ───────────────────────────────────────────
 function showScreen(id) {
@@ -453,9 +482,71 @@ function showScreen(id) {
 
 // ── SPLASH → INFO ────────────────────────────────────────────
 function startForm() {
+  const saved = loadProgress();
+  if (saved && saved.auditInfo && saved.auditInfo.nomorOutlet) {
+    const t = timeSince(saved.savedAt);
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1B4332;color:#fff;' +
+      'padding:16px 20px;z-index:9999;text-align:center;';
+    banner.innerHTML =
+      '<div style="font-weight:700;margin-bottom:6px;">Ada progress tersimpan (' + t + ')</div>' +
+      '<div style="font-size:13px;opacity:.8;margin-bottom:12px;">Outlet: ' + saved.auditInfo.nomorOutlet + '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:center;">' +
+      '<button onclick="restoreProgress()" style="background:#52B788;border:none;color:#fff;' +
+        'padding:10px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Lanjutkan</button>' +
+      '<button onclick="discardProgress()" style="background:rgba(255,255,255,.2);border:none;color:#fff;' +
+        'padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">Mulai Baru</button>' +
+      '</div>';
+    document.body.appendChild(banner);
+    window._restoreBanner = banner;
+    return;
+  }
+  _startFresh();
+}
+
+function _startFresh() {
   const d = new Date();
   document.getElementById('f-tanggal').value = d.toISOString().split('T')[0];
   showScreen('screen-info');
+}
+
+function restoreProgress() {
+  const saved = loadProgress();
+  if (!saved) return;
+  if (window._restoreBanner) { window._restoreBanner.remove(); }
+  auditInfo = saved.auditInfo;
+  auditItems = saved.auditItems;
+  currentSectionIdx = saved.currentSectionIdx || 0;
+  buildSectionScreens();
+  // Restore visual state for all items
+  ITEMS.forEach(function(item) {
+    const resp = auditItems[item.code];
+    if (!resp) return;
+    const btnYa  = document.getElementById('btn-ya-' + item.code);
+    const btnTdk = document.getElementById('btn-tidak-' + item.code);
+    const card   = document.getElementById('card-' + item.code);
+    const cat    = document.getElementById('cat-' + item.code);
+    const thumb  = document.getElementById('foto-thumb-' + item.code);
+    const btn    = document.getElementById('foto-btn-' + item.code);
+    if (!btnYa) return;
+    if (!resp.comply) {
+      btnYa.classList.remove('selected');
+      btnTdk.classList.add('selected');
+      if (card) card.className = 'item-card noncomply';
+      if (cat)  { cat.classList.remove('hidden'); cat.value = resp.catatan || ''; }
+    }
+    if (resp.fotoUrl) {
+      if (btn)   { btn.classList.add('uploaded'); btn.innerHTML = '✅ Foto Tersimpan'; }
+    }
+  });
+  goToSection(currentSectionIdx);
+}
+
+function discardProgress() {
+  clearProgress();
+  if (window._restoreBanner) { window._restoreBanner.remove(); }
+  ITEMS.forEach(i => { auditItems[i.code] = { comply: true, catatan: '', fotoUrl: '' }; });
+  _startFresh();
 }
 
 // ── INFO SUBMIT ───────────────────────────────────────────────
@@ -475,6 +566,7 @@ function submitInfo() {
 
   auditInfo = { nomorOutlet:outlet, namaAuditor:auditor, tanggalAudit:tanggal,
                 posisiAuditor:posisi, kategoriAudit:kategori, statusKebun:status, emailPIC:email };
+  saveProgress();
 
   buildSectionScreens();
   goToSection(0);
@@ -563,6 +655,7 @@ function setAnswer(code, comply) {
   // Show catatan only for non-comply
   catatan.classList.toggle('hidden', comply);
   if (comply) { auditItems[code].catatan = ''; catatan.value = ''; }
+  saveProgress();
 }
 
 // ── FOTO UPLOAD ───────────────────────────────────────────────
@@ -603,6 +696,7 @@ async function handleFotoSelect(event, code) {
         btn.classList.add('uploaded');
         btn.innerHTML = '✅ Foto Tersimpan';
         status.textContent = 'Tersimpan di Drive';
+        saveProgress();
       } else { throw new Error(result.message); }
     })
     .catch(function(err) {
@@ -645,6 +739,7 @@ function compressImage(file) {
 // ── SECTION NAV ───────────────────────────────────────────────
 function goToSection(idx) {
   currentSectionIdx = idx;
+  saveProgress();
   showScreen('screen-sec-' + SECTION_KEYS[idx]);
 }
 
@@ -727,6 +822,7 @@ function finalSubmit() {
     if (result && result.success) {
       document.getElementById('success-msg').textContent =
         result.message || 'Laporan dikirim ke email PIC outlet.';
+      clearProgress();
       showScreen('screen-success');
     } else {
       showError(result ? result.message : 'Server error');
@@ -748,6 +844,7 @@ function updateSubmitProgress(msg) {
 
 // ── RESET ─────────────────────────────────────────────────────
 function resetForm() {
+  clearProgress();
   auditInfo  = {};
   auditItems = {};
   ITEMS.forEach(i => { auditItems[i.code] = { comply:true, catatan:'', fotoUrl:'' }; });
