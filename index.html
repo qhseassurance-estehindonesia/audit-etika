@@ -688,21 +688,35 @@ async function handleFotoSelect(event, code) {
       body: JSON.stringify({action:'upload_photo', base64Data:compressed, fileName:fileName,
                             nomorOutlet:auditInfo.nomorOutlet, tanggal:tanggal})
     })
-    .then(r => r.json())
-    .then(function(result) {
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text(); // pakai text() dulu, lebih aman dari json()
+    })
+    .then(function(txt) {
+      var result;
+      try { result = JSON.parse(txt); }
+      catch(e) { throw new Error('Response bukan JSON: ' + txt.substring(0,100)); }
       if (result.success) {
         auditItems[code].fotoUrl = result.url;
         btn.classList.remove('uploading');
         btn.classList.add('uploaded');
         btn.innerHTML = '✅ Foto Tersimpan';
-        status.textContent = 'Tersimpan di Drive';
+        status.textContent = 'Drive ✓';
         saveProgress();
-      } else { throw new Error(result.message); }
+      } else {
+        throw new Error(result.message || 'Server error');
+      }
     })
     .catch(function(err) {
       btn.classList.remove('uploading');
       btn.innerHTML = '⚠️ Coba Lagi';
-      status.textContent = 'Upload gagal, tap untuk retry';
+      // Tampilkan pesan error yang lebih jelas untuk debugging
+      var msg = err.message || 'Unknown error';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        status.textContent = 'Cek koneksi / URL Apps Script';
+      } else {
+        status.textContent = msg.substring(0, 60);
+      }
       console.error('Upload error:', err);
     });
 
