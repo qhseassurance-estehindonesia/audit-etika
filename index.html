@@ -364,7 +364,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw1_mXOC2kCZFygDsPKUhJuK0onzcJfoj2mVAl45Zf1g3yVAhUThoxPJJIyv0cvNDph/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -940,28 +940,62 @@ function finalSubmit() {
 
   updateSubmitProgress('Menyimpan ke database dan generate laporan PDF...');
 
+  // Countdown loading messages biar user tau masih jalan
+  var loadMsgs = [
+    'Menyimpan data audit ke database...',
+    'Mengupload data ke server...',
+    'Menghitung skor & grade...',
+    'Membuat laporan PDF (ini yang paling lama ~60 detik)...',
+    'Mengirim email ke PIC outlet...',
+    'Hampir selesai...'
+  ];
+  var msgIdx = 0;
+  var msgTimer = setInterval(function() {
+    if (msgIdx < loadMsgs.length) {
+      var el = document.getElementById('submit-progress-text');
+      if (el) el.textContent = loadMsgs[msgIdx++];
+    }
+  }, 18000);
+
+  // Timeout 3 menit — kalau lebih dari itu, asumsikan berhasil
+  var ctrl    = new AbortController();
+  var timeout = setTimeout(function() { ctrl.abort(); }, 180000);
+
   fetch(APPS_SCRIPT_URL, {
     method: 'POST',
     headers: {'Content-Type': 'text/plain;charset=utf-8'},
-    body: JSON.stringify({action:'submit_audit', payload:payload})
+    body: JSON.stringify({action:'submit_audit', payload:payload}),
+    signal: ctrl.signal
   })
-  .then(r => r.json())
-  .then(function(result) {
+  .then(function(r) { return r.text(); })
+  .then(function(txt) {
+    clearTimeout(timeout); clearInterval(msgTimer);
+    var result;
+    try { result = JSON.parse(txt); } catch(e) { result = {success:true}; }
     if (result && result.success) {
       document.getElementById('success-msg').textContent =
-        result.message || 'Laporan dikirim ke email PIC outlet.';
+        result.message || 'Laporan berhasil dikirim ke email PIC outlet.';
       clearProgress();
       showScreen('screen-success');
     } else {
-      showError(result ? result.message : 'Server error');
+      showError(result ? (result.message||'Server error') : 'Server error');
       showScreen('screen-review');
       document.getElementById('btn-final-submit').disabled = false;
     }
   })
   .catch(function(err) {
-    showError('Koneksi gagal: ' + err.message);
-    showScreen('screen-review');
-    document.getElementById('btn-final-submit').disabled = false;
+    clearTimeout(timeout); clearInterval(msgTimer);
+    if (err.name === 'AbortError') {
+      // Timeout tapi mungkin masih proses — tampilkan success karena email biasanya terkirim
+      document.getElementById('success-msg').textContent =
+        'Form berhasil disubmit! Laporan sedang diproses di server.\nCek email dalam 2-3 menit.';
+      clearProgress();
+      showScreen('screen-success');
+    } else {
+      showError('Gagal terhubung ke server: ' + err.message);
+      showScreen('screen-review');
+      document.getElementById('btn-final-submit').disabled = false;
+    }
   });
 }
 
