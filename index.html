@@ -409,7 +409,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
   <div style="background:var(--green-900);color:#fff;flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:40px 28px;text-align:center;">
     <div class="submit-icon">✅</div>
     <div class="submit-title">Audit Berhasil Dikirim!</div>
-    <div class="submit-sub" id="success-msg" style="margin-top:12px;">Laporan PDF telah dikirimkan ke email PIC outlet.</div>
+    <div class="submit-sub" id="success-msg" style="margin-top:12px;">Data tersimpan! Laporan PDF sedang diproses dan akan dikirim ke email PIC dalam 1-2 menit.</div>
     <button class="splash-btn" style="margin-top:36px;" onclick="resetForm()">Audit Baru</button>
   </div>
 </div>
@@ -421,7 +421,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz4HufuVcZjs-3VLc6YMSttnhr1w1FgmXaVyM-IC3yeoLC4YiIrkOnkBdYLcD5jNdK/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -1069,9 +1069,11 @@ function initSigPad(id) {
   var canvas = document.getElementById('sig-' + id);
   if (!canvas) return;
   var dpr = window.devicePixelRatio || 1;
-  var rect = canvas.getBoundingClientRect();
-  canvas.width  = rect.width  * dpr;
-  canvas.height = 140 * dpr;
+  // offsetWidth lebih reliabel; getBoundingClientRect bisa return 0 saat pertama render
+  var w = canvas.offsetWidth;
+  if (!w || w <= 0) w = Math.min(window.innerWidth - 64, 480);
+  canvas.width  = Math.round(w * dpr);
+  canvas.height = Math.round(140 * dpr);
   var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.strokeStyle = '#1B4332';
@@ -1121,10 +1123,13 @@ function getSig(id) {
 function showSignatureScreen() {
   showScreen('screen-signature');
   // Init after render
-  setTimeout(function() {
-    initSigPad('auditor');
-    initSigPad('pic');
-  }, 150);
+  // Use requestAnimationFrame for reliable layout
+  requestAnimationFrame(function() {
+    setTimeout(function() {
+      initSigPad('auditor');
+      initSigPad('pic');
+    }, 100);
+  });
 }
 
 function doneSignature() {
@@ -1133,6 +1138,14 @@ function doneSignature() {
   saveProgress();
   showReview();
 }
+
+// Resize canvas saat orientasi layar berubah
+window.addEventListener('resize', function() {
+  ['auditor','pic'].forEach(function(id) {
+    var canvas = document.getElementById('sig-' + id);
+    if (canvas && sigState[id] === false) initSigPad(id);
+  });
+});
 
 // ── RESET ─────────────────────────────────────────────────────
 function resetForm() {
