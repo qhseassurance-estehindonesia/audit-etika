@@ -399,9 +399,9 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 <!-- ── SUBMIT PROGRESS ─────────────────────────────────────── -->
 <div id="screen-submit" class="screen">
   <div class="submit-spinner"></div>
-  <div class="submit-title">Mengirim Laporan...</div>
-  <div class="submit-sub">Menyimpan data dan generate laporan PDF. Mohon tunggu sebentar.</div>
-  <div class="submit-progress" id="submit-progress-text">Memproses data audit...</div>
+  <div class="submit-title">Mengirim Data...</div>
+  <div class="submit-sub">Data audit sedang dikirim ke server.<br>Proses ini seharusnya selesai dalam beberapa detik.</div>
+  <div class="submit-progress" id="submit-progress-text">Mengirim data ke server...</div>
 </div>
 
 <!-- ── SUCCESS ──────────────────────────────────────────────── -->
@@ -409,7 +409,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
   <div style="background:var(--green-900);color:#fff;flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:40px 28px;text-align:center;">
     <div class="submit-icon">✅</div>
     <div class="submit-title">Audit Berhasil Dikirim!</div>
-    <div class="submit-sub" id="success-msg" style="margin-top:12px;">Data tersimpan! Laporan PDF sedang diproses dan akan dikirim ke email PIC dalam 1-2 menit.</div>
+    <div class="submit-sub" id="success-msg" style="margin-top:12px;">Data berhasil diterima! Laporan PDF sedang diproses dan akan dikirim ke email PIC outlet dalam 1-3 menit.</div>
     <button class="splash-btn" style="margin-top:36px;" onclick="resetForm()">Audit Baru</button>
   </div>
 </div>
@@ -421,7 +421,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz4HufuVcZjs-3VLc6YMSttnhr1w1FgmXaVyM-IC3yeoLC4YiIrkOnkBdYLcD5jNdK/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -997,13 +997,11 @@ function finalSubmit() {
 
   updateSubmitProgress('Menyimpan ke database dan generate laporan PDF...');
 
-  // Countdown loading messages biar user tau masih jalan
+  // Loading messages - respon seharusnya datang dalam ~3 detik
   var loadMsgs = [
-    'Menyimpan data audit ke database...',
-    'Mengupload data ke server...',
-    'Menghitung skor & grade...',
-    'Membuat laporan PDF (ini yang paling lama ~60 detik)...',
-    'Mengirim email ke PIC outlet...',
+    'Mengirim data ke server...',
+    'Memvalidasi data audit...',
+    'Menghubungkan ke server...',
     'Hampir selesai...'
   ];
   var msgIdx = 0;
@@ -1012,11 +1010,11 @@ function finalSubmit() {
       var el = document.getElementById('submit-progress-text');
       if (el) el.textContent = loadMsgs[msgIdx++];
     }
-  }, 18000);
+  }, 4000);
 
-  // Timeout 3 menit — kalau lebih dari itu, asumsikan berhasil
+  // Timeout 30 detik — dengan arsitektur async, response harusnya cepat
   var ctrl    = new AbortController();
-  var timeout = setTimeout(function() { ctrl.abort(); }, 180000);
+  var timeout = setTimeout(function() { ctrl.abort(); }, 30000);
 
   fetch(APPS_SCRIPT_URL, {
     method: 'POST',
