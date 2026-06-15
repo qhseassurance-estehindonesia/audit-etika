@@ -421,7 +421,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx8ueBzRbrr2hUYL_j_0_Jn_AL3EoieP6bfhADbrA3EiqXWCPNtZUSlo4iUH3m3AVY-/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -590,104 +590,102 @@ function timeSince(isoStr) {
 
 // ── SIGNATURE PAD ────────────────────────────────────────────
 var sigState = { auditor: false, pic: false };
+var sigDrawing = { auditor: false, pic: false };
 
 function initSigPad(id) {
   var canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
-  // Hapus event lama biar tidak dobel saat reinit
-  var newCanvas = canvas.cloneNode(true);
-  canvas.parentNode.replaceChild(newCanvas, canvas);
-  canvas = newCanvas;
+  if (canvas.dataset.ready === '1') return; // sudah diinit
+  canvas.dataset.ready = '1';
 
-  var ctx     = canvas.getContext('2d');
-  var drawing = false;
-  var dpr     = window.devicePixelRatio || 1;
+  // Set ukuran pixel canvas = ukuran CSS aktual
+  var w = canvas.offsetWidth  || 320;
+  var h = canvas.offsetHeight || 140;
+  canvas.width  = w;
+  canvas.height = h;
 
+  var ctx = canvas.getContext('2d');
   ctx.strokeStyle = '#1B4332';
   ctx.lineWidth   = 2.5;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
 
-  function getPos(e) {
-    var rect = canvas.getBoundingClientRect();
-    var src  = e.touches ? e.touches[0] : e;
-    return {
-      x: (src.clientX - rect.left),
-      y: (src.clientY - rect.top)
-    };
+  function pos(e) {
+    var r = canvas.getBoundingClientRect();
+    var s = e.touches ? e.touches[0] : e;
+    return { x: s.clientX - r.left, y: s.clientY - r.top };
   }
-  function start(e) {
-    e.preventDefault();
-    drawing = true;
-    var p = getPos(e);
+
+  canvas.addEventListener('mousedown', function(e) {
+    sigDrawing[id] = true;
+    var p = pos(e);
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
-  }
-  function move(e) {
-    e.preventDefault();
-    if (!drawing) return;
-    var p = getPos(e);
+  });
+  canvas.addEventListener('mousemove', function(e) {
+    if (!sigDrawing[id]) return;
+    var p = pos(e);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
     sigState[id] = true;
-    var statusEl = document.getElementById('sig-' + id + '-status');
-    if (statusEl) statusEl.textContent = '✅ Tanda tangan terekam';
-  }
-  function stop(e) { drawing = false; ctx.beginPath(); }
+    var el = document.getElementById('sig-' + id + '-status');
+    if (el) el.textContent = '✅ Tanda tangan terekam';
+  });
+  canvas.addEventListener('mouseup',    function() { sigDrawing[id] = false; ctx.beginPath(); });
+  canvas.addEventListener('mouseleave', function() { sigDrawing[id] = false; ctx.beginPath(); });
 
-  canvas.addEventListener('mousedown',  start, {passive:false});
-  canvas.addEventListener('mousemove',  move,  {passive:false});
-  canvas.addEventListener('mouseup',    stop);
-  canvas.addEventListener('mouseleave', stop);
-  canvas.addEventListener('touchstart', start, {passive:false});
-  canvas.addEventListener('touchmove',  move,  {passive:false});
-  canvas.addEventListener('touchend',   stop,  {passive:false});
+  canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    sigDrawing[id] = true;
+    var p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (!sigDrawing[id]) return;
+    var p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    sigState[id] = true;
+    var el = document.getElementById('sig-' + id + '-status');
+    if (el) el.textContent = '✅ Tanda tangan terekam';
+  }, { passive: false });
+  canvas.addEventListener('touchend', function() { sigDrawing[id] = false; ctx.beginPath(); }, { passive: false });
 }
+
+function resizeCanvas(id) {} // tidak dipakai lagi
 
 function clearSig(id) {
   var canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
-  var ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  sigState[id] = false;
-  var statusEl = document.getElementById('sig-' + id + '-status');
-  if (statusEl) statusEl.textContent = '';
-  // Reinit setelah clear
-  initSigPad(id);
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  sigState[id]   = false;
+  sigDrawing[id] = false;
+  var el = document.getElementById('sig-' + id + '-status');
+  if (el) el.textContent = '';
 }
 
 function getSigDataURL(id) {
   var canvas = document.getElementById('canvas-' + id);
-  if (!canvas || !sigState[id]) return '';
-  return canvas.toDataURL('image/png');
+  return (canvas && sigState[id]) ? canvas.toDataURL('image/png') : '';
 }
 
 function showSignatureScreen() {
   showScreen('screen-signature');
-  // Tunggu screen benar-benar visible + layout selesai baru init canvas
-  requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      resizeCanvas('auditor');
-      resizeCanvas('pic');
-      initSigPad('auditor');
-      initSigPad('pic');
-    });
-  });
-}
-
-// Set ukuran pixel canvas sesuai ukuran CSS aktual (fix blur + koordinat)
-function resizeCanvas(id) {
-  var canvas = document.getElementById('canvas-' + id);
-  if (!canvas) return;
-  var rect = canvas.getBoundingClientRect();
-  if (rect.width > 0) {
-    canvas.width  = Math.round(rect.width  * (window.devicePixelRatio || 1));
-    canvas.height = Math.round(rect.height * (window.devicePixelRatio || 1));
-    var ctx = canvas.getContext('2d');
-    ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-  }
+  // Init setelah browser selesai render screen (butuh 2 frame)
+  setTimeout(function() {
+    var a = document.getElementById('canvas-auditor');
+    var p = document.getElementById('canvas-pic');
+    if (a) { delete a.dataset.ready; }
+    if (p) { delete p.dataset.ready; }
+    initSigPad('auditor');
+    initSigPad('pic');
+  }, 200);
 }
 
 function submitSignatures() {
