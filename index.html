@@ -298,9 +298,8 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
       <div class="section-label">Auditor</div>
       <div style="background:#fff;border-radius:12px;padding:12px;box-shadow:var(--shadow);">
         <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Tanda tangan di kotak bawah ini:</p>
-        <canvas id="canvas-auditor"
-          style="border:2px dashed var(--gray-300);border-radius:8px;touch-action:none;width:100%;height:140px;display:block;background:#FAFAF8;cursor:crosshair;">
-        </canvas>
+        <canvas id="canvas-auditor" width="600" height="180"
+          style="border:2px solid #74C69D;border-radius:8px;width:100%;height:160px;display:block;background:#FAFAF8;cursor:crosshair;touch-action:none;"></canvas>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button onclick="clearSig('auditor')" class="btn-secondary" style="margin:0;padding:8px 16px;font-size:13px;flex:0;">
             Ulangi
@@ -314,9 +313,8 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
       <div class="section-label">PIC Outlet</div>
       <div style="background:#fff;border-radius:12px;padding:12px;box-shadow:var(--shadow);">
         <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Minta PIC outlet tanda tangan di sini:</p>
-        <canvas id="canvas-pic"
-          style="border:2px dashed var(--gray-300);border-radius:8px;touch-action:none;width:100%;height:140px;display:block;background:#FAFAF8;cursor:crosshair;">
-        </canvas>
+        <canvas id="canvas-pic" width="600" height="180"
+          style="border:2px solid #74C69D;border-radius:8px;width:100%;height:160px;display:block;background:#FAFAF8;cursor:crosshair;touch-action:none;"></canvas>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button onclick="clearSig('pic')" class="btn-secondary" style="margin:0;padding:8px 16px;font-size:13px;flex:0;">
             Ulangi
@@ -421,7 +419,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx8ueBzRbrr2hUYL_j_0_Jn_AL3EoieP6bfhADbrA3EiqXWCPNtZUSlo4iUH3m3AVY-/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -590,82 +588,69 @@ function timeSince(isoStr) {
 
 // ── SIGNATURE PAD ────────────────────────────────────────────
 var sigState = { auditor: false, pic: false };
-var sigDrawing = { auditor: false, pic: false };
 
-function initSigPad(id) {
-  var canvas = document.getElementById('canvas-' + id);
+function _attachSigPad(id) {
+  var canvas  = document.getElementById('canvas-' + id);
   if (!canvas) return;
-  if (canvas.dataset.ready === '1') return; // sudah diinit
-  canvas.dataset.ready = '1';
-
-  // Set ukuran pixel canvas = ukuran CSS aktual
-  var w = canvas.offsetWidth  || 320;
-  var h = canvas.offsetHeight || 140;
-  canvas.width  = w;
-  canvas.height = h;
-
-  var ctx = canvas.getContext('2d');
+  var ctx     = canvas.getContext('2d');
+  var drawing = false;
+  var lastX   = 0, lastY = 0;
   ctx.strokeStyle = '#1B4332';
-  ctx.lineWidth   = 2.5;
+  ctx.lineWidth   = 3;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
 
-  function pos(e) {
-    var r = canvas.getBoundingClientRect();
-    var s = e.touches ? e.touches[0] : e;
-    return { x: s.clientX - r.left, y: s.clientY - r.top };
+  function getPos(e) {
+    var r   = canvas.getBoundingClientRect();
+    var src = e.touches ? e.touches[0] : e;
+    return {
+      x: (src.clientX - r.left) / r.width  * canvas.width,
+      y: (src.clientY - r.top)  / r.height * canvas.height
+    };
+  }
+  function markSigned() {
+    sigState[id] = true;
+    var el = document.getElementById('sig-' + id + '-status');
+    if (el) el.textContent = '✅ Tanda tangan terekam';
   }
 
-  canvas.addEventListener('mousedown', function(e) {
-    sigDrawing[id] = true;
-    var p = pos(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  });
-  canvas.addEventListener('mousemove', function(e) {
-    if (!sigDrawing[id]) return;
-    var p = pos(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    sigState[id] = true;
-    var el = document.getElementById('sig-' + id + '-status');
-    if (el) el.textContent = '✅ Tanda tangan terekam';
-  });
-  canvas.addEventListener('mouseup',    function() { sigDrawing[id] = false; ctx.beginPath(); });
-  canvas.addEventListener('mouseleave', function() { sigDrawing[id] = false; ctx.beginPath(); });
+  canvas.onmousedown  = function(e) { drawing=true; var p=getPos(e); lastX=p.x; lastY=p.y; };
+  canvas.onmousemove  = function(e) {
+    if (!drawing) return;
+    var p=getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(p.x,p.y); ctx.stroke();
+    lastX=p.x; lastY=p.y; markSigned();
+  };
+  canvas.onmouseup    = function() { drawing=false; };
+  canvas.onmouseleave = function() { drawing=false; };
 
-  canvas.addEventListener('touchstart', function(e) {
+  canvas.ontouchstart = function(e) {
+    e.preventDefault(); drawing=true;
+    var p=getPos(e); lastX=p.x; lastY=p.y;
+  };
+  canvas.ontouchmove  = function(e) {
     e.preventDefault();
-    sigDrawing[id] = true;
-    var p = pos(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  }, { passive: false });
-  canvas.addEventListener('touchmove', function(e) {
-    e.preventDefault();
-    if (!sigDrawing[id]) return;
-    var p = pos(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    sigState[id] = true;
-    var el = document.getElementById('sig-' + id + '-status');
-    if (el) el.textContent = '✅ Tanda tangan terekam';
-  }, { passive: false });
-  canvas.addEventListener('touchend', function() { sigDrawing[id] = false; ctx.beginPath(); }, { passive: false });
+    if (!drawing) return;
+    var p=getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(p.x,p.y); ctx.stroke();
+    lastX=p.x; lastY=p.y; markSigned();
+  };
+  canvas.ontouchend   = function() { drawing=false; };
 }
 
-function resizeCanvas(id) {} // tidak dipakai lagi
+// Init saat halaman load — canvas sudah ada di DOM meski hidden
+// width/height sudah di-set via HTML attribute jadi tidak perlu tunggu render
+_attachSigPad('auditor');
+_attachSigPad('pic');
+
+function resizeCanvas(id) {}
+function initSigPad(id)   {}
 
 function clearSig(id) {
   var canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
   canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-  sigState[id]   = false;
-  sigDrawing[id] = false;
+  sigState[id] = false;
   var el = document.getElementById('sig-' + id + '-status');
   if (el) el.textContent = '';
 }
@@ -677,15 +662,7 @@ function getSigDataURL(id) {
 
 function showSignatureScreen() {
   showScreen('screen-signature');
-  // Init setelah browser selesai render screen (butuh 2 frame)
-  setTimeout(function() {
-    var a = document.getElementById('canvas-auditor');
-    var p = document.getElementById('canvas-pic');
-    if (a) { delete a.dataset.ready; }
-    if (p) { delete p.dataset.ready; }
-    initSigPad('auditor');
-    initSigPad('pic');
-  }, 200);
+  // Tidak perlu init ulang - sudah diinit saat page load
 }
 
 function submitSignatures() {
