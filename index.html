@@ -419,7 +419,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzMu4SLHaaqBaDW2dGJeitUxWyQJKd4dt8vVcCNOJR0XllP9Aka7pg-pKfCCRmM6wlq/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -649,9 +649,11 @@ function initSigPad(id)   {}
 function clearSig(id) {
   var canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
+  // Force full canvas reset — clears pixels AND context state
+  var w = canvas.width;
+  canvas.width = w;
+  // Re-set stroke style after reset
   var ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Reset stroke style after clear
   ctx.strokeStyle = '#1B4332';
   ctx.lineWidth   = 3;
   ctx.lineCap     = 'round';
@@ -659,11 +661,16 @@ function clearSig(id) {
   sigState[id] = false;
   var el = document.getElementById('sig-' + id + '-status');
   if (el) el.textContent = '';
+  // Re-attach event handlers (canvas.width= removes them)
+  canvas._sigReady = false;
+  _attachSigPad(id);
 }
 
 function getSigDataURL(id) {
   var canvas = document.getElementById('canvas-' + id);
-  return (canvas && sigState[id]) ? canvas.toDataURL('image/png') : '';
+  if (!canvas || !sigState[id]) return '';
+  // Compress to JPEG 0.6 untuk kurangi ukuran data
+  return canvas.toDataURL('image/jpeg', 0.6);
 }
 
 function showSignatureScreen() {
