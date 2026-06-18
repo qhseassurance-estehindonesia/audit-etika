@@ -419,7 +419,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzKV4vlmSxN9Xl0hkHEmBpwEfTd3lJbpSQz1aSZHTUsSK1mOiZbbXaJtGcV4OmPqgs/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -587,14 +587,21 @@ function timeSince(isoStr) {
 
 
 // ── SIGNATURE PAD ────────────────────────────────────────────
-var sigState = { auditor: false, pic: false };
+// Simpan ctx & state di module level biar clearSig bisa akses
+var sigState   = { auditor: false, pic: false };
+var _sigCtx    = {};   // { auditor: ctx, pic: ctx }
+var _sigDown   = {};   // { auditor: false, pic: false }
+var _sigLast   = {};   // { auditor: {x,y}, pic: {x,y} }
 
 function _attachSigPad(id) {
-  var canvas  = document.getElementById('canvas-' + id);
+  var canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
-  var ctx     = canvas.getContext('2d');
-  var drawing = false;
-  var lastX   = 0, lastY = 0;
+
+  var ctx = canvas.getContext('2d');
+  _sigCtx[id]  = ctx;
+  _sigDown[id] = false;
+  _sigLast[id] = { x:0, y:0 };
+
   ctx.strokeStyle = '#1B4332';
   ctx.lineWidth   = 3;
   ctx.lineCap     = 'round';
@@ -608,79 +615,121 @@ function _attachSigPad(id) {
       y: (src.clientY - r.top)  / r.height * canvas.height
     };
   }
-  function markSigned() {
-    sigState[id] = true;
-    var el = document.getElementById('sig-' + id + '-status');
-    if (el) el.textContent = '✅ Tanda tangan terekam';
-  }
 
-  canvas.onmousedown  = function(e) { drawing=true; var p=getPos(e); lastX=p.x; lastY=p.y; };
-  canvas.onmousemove  = function(e) {
-    if (!drawing) return;
-    var p=getPos(e);
-    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(p.x,p.y); ctx.stroke();
-    lastX=p.x; lastY=p.y; markSigned();
+  canvas.onmousedown  = function(e) {
+    _sigDown[id] = true;
+    var p = getPos(e); _sigLast[id] = p;
   };
-  canvas.onmouseup    = function() { drawing=false; };
-  canvas.onmouseleave = function() { drawing=false; };
+  canvas.onmousemove  = function(e) {
+    if (!_sigDown[id]) return;
+    var p = getPos(e);
+    _sigCtx[id].beginPath();
+    _sigCtx[id].moveTo(_sigLast[id].x, _sigLast[id].y);
+    _sigCtx[id].lineTo(p.x, p.y);
+    _sigCtx[id].stroke();
+    _sigLast[id] = p;
+    _markSig(id);
+  };
+  canvas.onmouseup    = function() { _sigDown[id] = false; };
+  canvas.onmouseleave = function() { _sigDown[id] = false; };
 
   canvas.ontouchstart = function(e) {
-    e.preventDefault(); drawing=true;
-    var p=getPos(e); lastX=p.x; lastY=p.y;
+    e.preventDefault(); _sigDown[id] = true;
+    var p = getPos(e); _sigLast[id] = p;
   };
   canvas.ontouchmove  = function(e) {
     e.preventDefault();
-    if (!drawing) return;
-    var p=getPos(e);
-    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(p.x,p.y); ctx.stroke();
-    lastX=p.x; lastY=p.y; markSigned();
+    if (!_sigDown[id]) return;
+    var p = getPos(e);
+    _sigCtx[id].beginPath();
+    _sigCtx[id].moveTo(_sigLast[id].x, _sigLast[id].y);
+    _sigCtx[id].lineTo(p.x, p.y);
+    _sigCtx[id].stroke();
+    _sigLast[id] = p;
+    _markSig(id);
   };
-  canvas.ontouchend   = function() { drawing=false; };
+  canvas.ontouchend   = function() { _sigDown[id] = false; };
 }
 
-// Init saat halaman load — canvas sudah ada di DOM meski hidden
-// width/height sudah di-set via HTML attribute jadi tidak perlu tunggu render
+function _markSig(id) {
+  sigState[id] = true;
+  var el = document.getElementById('sig-' + id + '-status');
+  if (el) el.textContent = '✅ Tanda tangan terekam';
+}
+
+// Init saat page load — canvas punya width/height dari HTML attribute
 _attachSigPad('auditor');
 _attachSigPad('pic');
-
-function resizeCanvas(id) {}
-function initSigPad(id)   {}
 
 function clearSig(id) {
   var canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
-  // Force full canvas reset — clears pixels AND context state
-  var w = canvas.width;
-  canvas.width = w;
-  // Re-set stroke style after reset
+  // Clear pixel buffer
   var ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Restore stroke style (clearRect tidak reset, tapi force biar aman)
   ctx.strokeStyle = '#1B4332';
   ctx.lineWidth   = 3;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
+  // Reset state
+  _sigCtx[id]  = ctx;
+  _sigDown[id] = false;
   sigState[id] = false;
   var el = document.getElementById('sig-' + id + '-status');
   if (el) el.textContent = '';
-  // Re-attach event handlers (canvas.width= removes them)
-  canvas._sigReady = false;
-  _attachSigPad(id);
 }
 
 function getSigDataURL(id) {
   var canvas = document.getElementById('canvas-' + id);
   if (!canvas || !sigState[id]) return '';
-  // Compress to JPEG 0.6 untuk kurangi ukuran data
-  return canvas.toDataURL('image/jpeg', 0.6);
+  return canvas.toDataURL('image/jpeg', 0.5);
 }
+
+function resizeCanvas(id) {}
+function initSigPad(id)   {}
 
 function showSignatureScreen() {
   showScreen('screen-signature');
-  // Tidak perlu init ulang - sudah diinit saat page load
 }
 
-function submitSignatures() {
-  auditInfo.signAuditor = getSigDataURL('auditor');
-  auditInfo.signPIC     = getSigDataURL('pic');
+async function submitSignatures() {
+  // Upload signatures ke Drive dulu (sama seperti foto),
+  // supaya di PDF hanya perlu URL bukan base64 besar
+  var tanggal = auditInfo.tanggalAudit || new Date().toISOString().split('T')[0];
+
+  async function uploadSig(id) {
+    var dataUrl = getSigDataURL(id);
+    if (!dataUrl) return '';
+    try {
+      var r = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({
+          action: 'upload_photo',
+          base64Data: dataUrl,
+          fileName: 'signature_' + id + '_' + Date.now() + '.jpg',
+          nomorOutlet: auditInfo.nomorOutlet || 'sig',
+          tanggal: tanggal
+        })
+      });
+      var txt    = await r.text();
+      var result = JSON.parse(txt);
+      return result.success ? result.url : dataUrl; // fallback ke base64 kalau gagal
+    } catch(e) {
+      return dataUrl; // fallback
+    }
+  }
+
+  // Show loading indicator
+  var btn = document.querySelector('#screen-signature .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Mengupload TTD...'; }
+
+  auditInfo.signAuditor = await uploadSig('auditor');
+  auditInfo.signPIC     = await uploadSig('pic');
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Lanjut Review →'; }
+
   saveProgress();
   showReview();
 }
