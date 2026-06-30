@@ -301,7 +301,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
         <canvas id="canvas-auditor" width="600" height="180"
           style="border:2px solid #74C69D;border-radius:8px;width:100%;height:160px;display:block;background:#FAFAF8;cursor:crosshair;touch-action:none;"></canvas>
         <div style="display:flex;gap:8px;margin-top:8px;">
-          <button onclick="clearSig('auditor')" class="btn-secondary" style="margin:0;padding:8px 16px;font-size:13px;flex:0;">
+          <button id="btn-ulangi-auditor" class="btn-secondary" style="margin:0;padding:8px 16px;font-size:13px;flex:0;">
             Ulangi
           </button>
           <span id="sig-auditor-status" style="font-size:12px;color:var(--gray-600);align-self:center;"></span>
@@ -316,7 +316,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
         <canvas id="canvas-pic" width="600" height="180"
           style="border:2px solid #74C69D;border-radius:8px;width:100%;height:160px;display:block;background:#FAFAF8;cursor:crosshair;touch-action:none;"></canvas>
         <div style="display:flex;gap:8px;margin-top:8px;">
-          <button onclick="clearSig('pic')" class="btn-secondary" style="margin:0;padding:8px 16px;font-size:13px;flex:0;">
+          <button id="btn-ulangi-pic" class="btn-secondary" style="margin:0;padding:8px 16px;font-size:13px;flex:0;">
             Ulangi
           </button>
           <span id="sig-pic-status" style="font-size:12px;color:var(--gray-600);align-self:center;"></span>
@@ -332,49 +332,6 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 
 
 <!-- ── TANDA TANGAN ────────────────────────────────────────── -->
-<div id="screen-signature" class="screen">
-  <div class="topbar">
-    <div class="topbar-row">
-      <div>
-        <div class="topbar-title">Tanda Tangan Digital</div>
-        <div class="topbar-sub">Auditor & PIC Outlet</div>
-      </div>
-      <div class="step-badge">✍️</div>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" style="width:97%"></div></div>
-  </div>
-  <div class="content">
-    <div class="section-card">
-      <div class="section-card-name">Tanda Tangan</div>
-      <div class="section-card-sub">Tanda tangan langsung dengan jari di layar</div>
-    </div>
-
-    <div class="sig-block">
-      <p class="sig-label">✍️ Tanda Tangan Auditor</p>
-      <p class="sig-sub">Tanda tangan di area abu-abu di bawah</p>
-      <canvas id="sig-auditor" class="sig-canvas"></canvas>
-      <div class="sig-footer">
-        <span class="sig-hint" id="sig-auditor-hint">Belum ditanda tangani</span>
-        <button class="sig-clear" onclick="clearSig('auditor')">🗑 Hapus</button>
-      </div>
-    </div>
-
-    <div class="sig-block">
-      <p class="sig-label">✍️ Tanda Tangan PIC Outlet</p>
-      <p class="sig-sub">Tanda tangan di area abu-abu di bawah</p>
-      <canvas id="sig-pic" class="sig-canvas"></canvas>
-      <div class="sig-footer">
-        <span class="sig-hint" id="sig-pic-hint">Belum ditanda tangani</span>
-        <button class="sig-clear" onclick="clearSig('pic')">🗑 Hapus</button>
-      </div>
-    </div>
-  </div>
-  <div class="bottom-nav">
-    <button class="btn-primary" onclick="doneSignature()">Review & Submit →</button>
-    <button class="btn-secondary" id="btn-back-sig" onclick="goToSection(SECTION_KEYS.length-1)">← Kembali ke FS</button>
-  </div>
-</div>
-
 <!-- ── REVIEW ──────────────────────────────────────────────── -->
 <div id="screen-review" class="screen">
   <div class="topbar">
@@ -419,7 +376,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyaDeOMbJMP_cK4dXsoSfeHaj8nnbgvZPbxjUwzK5BBF8tKj3GuxOVRtFL-YdSSGenx/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -649,6 +606,7 @@ function _attachSigPad(id) {
     _markSig(id);
   };
   canvas.ontouchend   = function() { _sigDown[id] = false; };
+
 }
 
 function _markSig(id) {
@@ -664,21 +622,36 @@ _attachSigPad('pic');
 function clearSig(id) {
   var canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
-  // Clear pixel buffer
+  // Reset canvas dengan 3 cara sekaligus untuk kompatibilitas maksimal:
+  var w = canvas.width, h = canvas.height;
+  // 1. Reset via width assignment (clears buffer + context state)
+  canvas.width = w;
+  // 2. Re-fill background (force visual repaint)
   var ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Restore stroke style (clearRect tidak reset, tapi force biar aman)
+  ctx.fillStyle = '#FAFAF8';
+  ctx.fillRect(0, 0, w, h);
+  // 3. Reset drawing style
   ctx.strokeStyle = '#1B4332';
   ctx.lineWidth   = 3;
   ctx.lineCap     = 'round';
   ctx.lineJoin    = 'round';
-  // Reset state
   _sigCtx[id]  = ctx;
   _sigDown[id] = false;
   sigState[id] = false;
   var el = document.getElementById('sig-' + id + '-status');
   if (el) el.textContent = '';
 }
+
+// Event delegation untuk tombol Ulangi — paling reliable, tidak bergantung pada timing DOM
+document.addEventListener('click', function(e) {
+  var t = e.target;
+  if (!t) return;
+  if (t.id === 'btn-ulangi-auditor' || (t.closest && t.closest('#btn-ulangi-auditor'))) {
+    clearSig('auditor');
+  } else if (t.id === 'btn-ulangi-pic' || (t.closest && t.closest('#btn-ulangi-pic'))) {
+    clearSig('pic');
+  }
+});
 
 function getSigDataURL(id) {
   var canvas = document.getElementById('canvas-' + id);
@@ -1149,91 +1122,6 @@ function updateSubmitProgress(msg) {
   if (el) el.textContent = msg;
 }
 
-
-// ── TANDA TANGAN DIGITAL ─────────────────────────────────────
-var sigState = { auditor: false, pic: false };
-
-function initSigPad(id) {
-  var canvas = document.getElementById('sig-' + id);
-  if (!canvas) return;
-  var dpr = window.devicePixelRatio || 1;
-  // offsetWidth lebih reliabel; getBoundingClientRect bisa return 0 saat pertama render
-  var w = canvas.offsetWidth;
-  if (!w || w <= 0) w = Math.min(window.innerWidth - 64, 480);
-  canvas.width  = Math.round(w * dpr);
-  canvas.height = Math.round(140 * dpr);
-  var ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  ctx.strokeStyle = '#1B4332';
-  ctx.lineWidth   = 2.5;
-  ctx.lineCap     = 'round';
-  ctx.lineJoin    = 'round';
-
-  var drawing = false;
-  function pos(e) {
-    var t = e.touches ? e.touches[0] : e;
-    var r = canvas.getBoundingClientRect();
-    return { x: t.clientX - r.left, y: t.clientY - r.top };
-  }
-  canvas.addEventListener('touchstart', function(e) { drawing=true; var p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); }, {passive:false});
-  canvas.addEventListener('touchmove',  function(e) { if(!drawing)return; var p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); markSigned(id); e.preventDefault(); }, {passive:false});
-  canvas.addEventListener('touchend',   function() { drawing=false; });
-  canvas.addEventListener('mousedown',  function(e) { drawing=true; var p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); });
-  canvas.addEventListener('mousemove',  function(e) { if(!drawing)return; var p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); markSigned(id); });
-  canvas.addEventListener('mouseup',    function() { drawing=false; });
-}
-
-function markSigned(id) {
-  sigState[id] = true;
-  var canvas = document.getElementById('sig-' + id);
-  if (canvas) canvas.classList.add('has-sig');
-  var hint = document.getElementById('sig-' + id + '-hint');
-  if (hint) hint.textContent = 'Sudah ditanda tangani ✓';
-}
-
-function clearSig(id) {
-  var canvas = document.getElementById('sig-' + id);
-  if (!canvas) return;
-  var dpr = window.devicePixelRatio || 1;
-  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-  canvas.classList.remove('has-sig');
-  sigState[id] = false;
-  var hint = document.getElementById('sig-' + id + '-hint');
-  if (hint) hint.textContent = 'Belum ditanda tangani';
-}
-
-function getSig(id) {
-  var canvas = document.getElementById('sig-' + id);
-  if (!canvas || !sigState[id]) return '';
-  return canvas.toDataURL('image/png');
-}
-
-function showSignatureScreen() {
-  showScreen('screen-signature');
-  // Init after render
-  // Use requestAnimationFrame for reliable layout
-  requestAnimationFrame(function() {
-    setTimeout(function() {
-      initSigPad('auditor');
-      initSigPad('pic');
-    }, 100);
-  });
-}
-
-function doneSignature() {
-  auditInfo.signAuditor = getSig('auditor');
-  auditInfo.signPIC     = getSig('pic');
-  saveProgress();
-  showReview();
-}
-
-// Resize canvas saat orientasi layar berubah
-window.addEventListener('resize', function() {
-  ['auditor','pic'].forEach(function(id) {
-    var canvas = document.getElementById('sig-' + id);
-    if (canvas && sigState[id] === false) initSigPad(id);
-  });
-});
 
 // ── RESET ─────────────────────────────────────────────────────
 function resetForm() {
