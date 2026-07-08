@@ -311,6 +311,16 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 
     <div style="margin-bottom:20px;">
       <div class="section-label">PIC Outlet</div>
+      <div style="background:#fff;border-radius:12px;padding:12px;box-shadow:var(--shadow);margin-bottom:12px;">
+        <div class="field" style="margin-bottom:12px;">
+          <label>Nama PIC Outlet <span style="color:var(--red-600)">*</span></label>
+          <input type="text" id="f-pic-nama" placeholder="Nama lengkap PIC" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Jabatan PIC Outlet <span style="color:var(--red-600)">*</span></label>
+          <input type="text" id="f-pic-jabatan" placeholder="Contoh: Store Manager, Supervisor" autocomplete="off">
+        </div>
+      </div>
       <div style="background:#fff;border-radius:12px;padding:12px;box-shadow:var(--shadow);">
         <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Minta PIC outlet tanda tangan di sini:</p>
         <canvas id="canvas-pic" width="600" height="180"
@@ -376,7 +386,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyaDeOMbJMP_cK4dXsoSfeHaj8nnbgvZPbxjUwzK5BBF8tKj3GuxOVRtFL-YdSSGenx/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -667,6 +677,15 @@ function showSignatureScreen() {
 }
 
 async function submitSignatures() {
+  // Validasi nama & jabatan PIC wajib diisi
+  var picNama    = document.getElementById('f-pic-nama').value.trim();
+  var picJabatan = document.getElementById('f-pic-jabatan').value.trim();
+  if (!picNama)    { showError('Nama PIC Outlet wajib diisi!');    document.getElementById('f-pic-nama').focus();    return; }
+  if (!picJabatan) { showError('Jabatan PIC Outlet wajib diisi!'); document.getElementById('f-pic-jabatan').focus(); return; }
+
+  auditInfo.namaPIC    = picNama;
+  auditInfo.jabatanPIC = picJabatan;
+
   // Upload signatures ke Drive dulu (sama seperti foto),
   // supaya di PDF hanya perlu URL bukan base64 besar
   var tanggal = auditInfo.tanggalAudit || new Date().toISOString().split('T')[0];
