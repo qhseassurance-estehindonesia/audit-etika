@@ -334,7 +334,34 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
       </div>
     </div>
   </div>
-  <div class="bottom-nav">
+    <!-- Foto Dokumentasi -->
+  <div style="background:#fff;border-radius:12px;padding:16px;margin:0 16px 16px;box-shadow:var(--shadow);">
+    <div class="section-label" style="margin-bottom:12px;">FOTO DOKUMENTASI</div>
+
+    <div style="margin-bottom:16px;">
+      <p style="font-size:13px;font-weight:600;color:var(--gray-900);margin-bottom:4px;">📸 Foto Bersama Auditor &amp; Auditee</p>
+      <p style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Bukti kehadiran audit</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-input-bersama" onchange="handleExtraPhoto(event,'bersama')">
+        <label class="foto-btn" id="foto-btn-bersama" for="foto-input-bersama">📷 Upload Foto</label>
+        <img class="foto-thumb" id="foto-thumb-bersama">
+        <span class="upload-status" id="foto-status-bersama"></span>
+      </div>
+    </div>
+
+    <div>
+      <p style="font-size:13px;font-weight:600;color:var(--gray-900);margin-bottom:4px;">📖 Foto Communication Book</p>
+      <p style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Hasil pengisian communication book di outlet</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-input-commbook" onchange="handleExtraPhoto(event,'commbook')">
+        <label class="foto-btn" id="foto-btn-commbook" for="foto-input-commbook">📷 Upload Foto</label>
+        <img class="foto-thumb" id="foto-thumb-commbook">
+        <span class="upload-status" id="foto-status-commbook"></span>
+      </div>
+    </div>
+  </div>
+
+<div class="bottom-nav">
     <button class="btn-primary" onclick="submitSignatures()">Lanjut Review →</button>
     <button class="btn-secondary" onclick="goToSection(8)">← Kembali ke FS</button>
   </div>
@@ -386,7 +413,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx657NasETGg05kXgjIFqvuscfZCuYij66SdQM9xsqlsG5cBStuBvhK5IqfLygGnr7t/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -676,6 +703,48 @@ function showSignatureScreen() {
   showScreen('screen-signature');
 }
 
+// ── EXTRA PHOTOS (foto bersama & communication book) ────────────
+var extraPhotos = { bersama: '', commbook: '' };
+
+async function handleExtraPhoto(event, key) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var btn    = document.getElementById('foto-btn-' + key);
+  var thumb  = document.getElementById('foto-thumb-' + key);
+  var status = document.getElementById('foto-status-' + key);
+
+  btn.classList.add('uploading');
+  btn.innerHTML = '⏳ Mengupload...';
+
+  try {
+    var compressed = await compressImage(file);
+    thumb.src = compressed;
+    thumb.classList.add('show');
+
+    var tanggal  = auditInfo.tanggalAudit || new Date().toISOString().split('T')[0];
+    var fileName = key + '_' + Date.now() + '.jpg';
+
+    var r      = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'upload_photo', base64Data:compressed,
+        fileName:fileName, nomorOutlet:auditInfo.nomorOutlet||'doc', tanggal:tanggal })
+    });
+    var result = JSON.parse(await r.text());
+    if (result.success) {
+      extraPhotos[key] = result.url;
+      btn.classList.remove('uploading');
+      btn.classList.add('uploaded');
+      btn.innerHTML = '✅ Foto Tersimpan';
+      status.textContent = 'Tersimpan';
+    } else { throw new Error(result.message); }
+  } catch(e) {
+    btn.classList.remove('uploading');
+    btn.innerHTML = '⚠️ Coba Lagi';
+    status.textContent = 'Gagal upload';
+  }
+}
+
 async function submitSignatures() {
   // Validasi nama & jabatan PIC wajib diisi
   var picNama    = document.getElementById('f-pic-nama').value.trim();
@@ -683,8 +752,10 @@ async function submitSignatures() {
   if (!picNama)    { showError('Nama PIC Outlet wajib diisi!');    document.getElementById('f-pic-nama').focus();    return; }
   if (!picJabatan) { showError('Jabatan PIC Outlet wajib diisi!'); document.getElementById('f-pic-jabatan').focus(); return; }
 
-  auditInfo.namaPIC    = picNama;
-  auditInfo.jabatanPIC = picJabatan;
+  auditInfo.namaPIC      = picNama;
+  auditInfo.jabatanPIC   = picJabatan;
+  auditInfo.fotoBersama  = extraPhotos.bersama;
+  auditInfo.fotoCommBook = extraPhotos.commbook;
 
   // Upload signatures ke Drive dulu (sama seperti foto),
   // supaya di PDF hanya perlu URL bukan base64 besar
