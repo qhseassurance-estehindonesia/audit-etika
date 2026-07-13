@@ -413,7 +413,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw2FZVgny0YDW_r5Am3B4EJHoCKmKK5bm0MmHaYQutJ2NUevJPWDgW-FUMA3vFwiCCl/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -596,6 +596,10 @@ function _attachSigPad(id) {
   _sigDown[id] = false;
   _sigLast[id] = { x:0, y:0 };
 
+  // Fill putih — CSS background tidak ikut ke toDataURL (JPEG → hitam)
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   ctx.strokeStyle = '#1B4332';
   ctx.lineWidth   = 3;
   ctx.lineCap     = 'round';
@@ -665,7 +669,7 @@ function clearSig(id) {
   canvas.width = w;
   // 2. Re-fill background (force visual repaint)
   var ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#FAFAF8';
+  ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, w, h);
   // 3. Reset drawing style
   ctx.strokeStyle = '#1B4332';
