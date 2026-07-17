@@ -231,6 +231,14 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
         <input type="text" id="f-outlet" placeholder="Contoh: ESI-JKT-001" autocomplete="off">
       </div>
       <div class="field">
+        <label>Nama Outlet <span style="color:var(--red-600)">*</span></label>
+        <input type="text" id="f-nama-outlet" placeholder="Contoh: Esteh Indonesia Sudirman" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Alamat Kebun <span style="color:var(--red-600)">*</span></label>
+        <input type="text" id="f-alamat" placeholder="Alamat lengkap outlet" autocomplete="off">
+      </div>
+      <div class="field">
         <label>Nama Auditor <span style="color:var(--red-600)">*</span></label>
         <input type="text" id="f-auditor" placeholder="Nama lengkap" autocomplete="name">
       </div>
@@ -413,7 +421,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwk6vz7nbNF-HhW52Iug-5pZKVwmyC_LFatJDqrDda_dNXdsBFaAnmifrBFYgz6QxTe/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -879,20 +887,28 @@ function discardProgress() {
 
 // ── INFO SUBMIT ───────────────────────────────────────────────
 function submitInfo() {
-  const outlet   = document.getElementById('f-outlet').value.trim();
-  const auditor  = document.getElementById('f-auditor').value.trim();
+  const outlet      = document.getElementById('f-outlet').value.trim();
+  const namaOutlet  = document.getElementById('f-nama-outlet').value.trim();
+  const alamat      = document.getElementById('f-alamat').value.trim();
+  const auditor     = document.getElementById('f-auditor').value.trim();
   const tanggal  = document.getElementById('f-tanggal').value;
   const posisi   = document.getElementById('f-posisi').value.trim();
   const kategori = document.getElementById('f-kategori').value;
   const status   = document.getElementById('f-status').value;
   const email    = document.getElementById('f-email').value.trim();
 
-  if (!outlet||!auditor||!tanggal||!posisi||!kategori||!status||!email) {
-    alert('Semua field wajib diisi!'); return;
-  }
-  if (!email.includes('@')) { alert('Format email tidak valid!'); return; }
+  if (!outlet)      { showError('Nomor Outlet wajib diisi!');    document.getElementById('f-outlet').focus();      return; }
+  if (!namaOutlet)  { showError('Nama Outlet wajib diisi!');     document.getElementById('f-nama-outlet').focus(); return; }
+  if (!alamat)      { showError('Alamat Kebun wajib diisi!');     document.getElementById('f-alamat').focus();      return; }
+  if (!auditor)     { showError('Nama Auditor wajib diisi!');     document.getElementById('f-auditor').focus();     return; }
+  if (!tanggal)     { showError('Tanggal Audit wajib diisi!');    document.getElementById('f-tanggal').focus();     return; }
+  if (!posisi)      { showError('Posisi Auditor wajib diisi!');   document.getElementById('f-posisi').focus();      return; }
+  if (!kategori)    { showError('Kategori Audit wajib dipilih!'); document.getElementById('f-kategori').focus();   return; }
+  if (!status)      { showError('Status Kebun wajib dipilih!');   document.getElementById('f-status').focus();      return; }
+  if (!email || !email.includes('@')) { alert('Format email tidak valid!'); return; }
 
-  auditInfo = { nomorOutlet:outlet, namaAuditor:auditor, tanggalAudit:tanggal,
+  auditInfo = { nomorOutlet:outlet, namaOutlet:namaOutlet, alamatKebun:alamat,
+                namaAuditor:auditor, tanggalAudit:tanggal,
                 posisiAuditor:posisi, kategoriAudit:kategori, statusKebun:status, emailPIC:email };
   saveProgress();
 
