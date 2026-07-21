@@ -410,7 +410,16 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
     <div class="submit-icon">✅</div>
     <div class="submit-title">Audit Berhasil Dikirim!</div>
     <div class="submit-sub" id="success-msg" style="margin-top:12px;">Data berhasil diterima! Laporan PDF sedang diproses dan akan dikirim ke email PIC outlet dalam 1-3 menit.</div>
-    <button class="splash-btn" style="margin-top:36px;" onclick="resetForm()">Audit Baru</button>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:32px;width:100%;max-width:280px;">
+      <button class="splash-btn" onclick="resetForm()">+ Audit Baru</button>
+      <button onclick="loadLastSubmission()"
+        style="background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.4);color:#fff;
+               border-radius:14px;padding:14px 24px;font-size:15px;font-weight:600;
+               font-family:inherit;cursor:pointer;">
+        ✏️ Revisi & Kirim Ulang
+      </button>
+    </div>
+    <p style="margin-top:16px;font-size:11px;opacity:.5;">Gunakan "Revisi" jika ada typo atau kesalahan data</p>
   </div>
 </div>
 
@@ -421,7 +430,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby5eMCc3Pq0_Ig2bIFADEi1tx5DpyS-KzL86VshMJOJYJ78qvfAQB3mP2eapi7qcNtE/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -1203,6 +1212,13 @@ function finalSubmit() {
     if (result && result.success) {
       document.getElementById('success-msg').textContent =
         result.message || 'Laporan berhasil dikirim ke email PIC outlet.';
+      // Simpan backup submission terakhir untuk keperluan revisi
+      try {
+        localStorage.setItem('audit_etika_last_submission', JSON.stringify({
+          info: auditInfo, items: auditItems,
+          submittedAt: new Date().toISOString()
+        }));
+      } catch(e) {}
       clearProgress();
       showScreen('screen-success');
     } else {
@@ -1217,6 +1233,13 @@ function finalSubmit() {
       // Timeout tapi mungkin masih proses — tampilkan success karena email biasanya terkirim
       document.getElementById('success-msg').textContent =
         'Form berhasil disubmit! Laporan sedang diproses di server.\nCek email dalam 2-3 menit.';
+      // Simpan backup submission terakhir untuk keperluan revisi
+      try {
+        localStorage.setItem('audit_etika_last_submission', JSON.stringify({
+          info: auditInfo, items: auditItems,
+          submittedAt: new Date().toISOString()
+        }));
+      } catch(e) {}
       clearProgress();
       showScreen('screen-success');
     } else {
@@ -1238,9 +1261,74 @@ function resetForm() {
   clearProgress();
   auditInfo  = {};
   auditItems = {};
+  extraPhotos = { bersama:'', commbook:'' };
   ITEMS.forEach(i => { auditItems[i.code] = { comply:true, catatan:'', fotoUrl:'' }; });
   document.getElementById('screen-sections').innerHTML = '';
   showScreen('screen-splash');
+}
+
+function loadLastSubmission() {
+  try {
+    var raw = localStorage.getItem('audit_etika_last_submission');
+    if (!raw) { showError('Tidak ada data submission terakhir yang tersimpan.'); return; }
+    var saved = JSON.parse(raw);
+    var subTime = saved.submittedAt ? new Date(saved.submittedAt).toLocaleString('id-ID') : '-';
+
+    // Konfirmasi
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    banner.innerHTML = '<div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;text-align:center;">'
+      + '<p style="font-weight:700;font-size:16px;margin-bottom:8px;">Load Data Terakhir?</p>'
+      + '<p style="font-size:13px;color:#666;margin-bottom:4px;">Outlet: <strong>' + (saved.info.nomorOutlet||'-') + '</strong></p>'
+      + '<p style="font-size:13px;color:#666;margin-bottom:16px;">Dikirim: ' + subTime + '</p>'
+      + '<p style="font-size:12px;color:#888;margin-bottom:20px;">Semua jawaban, foto, dan tanda tangan akan dimuat ulang. Kamu bisa edit lalu kirim ulang.</p>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button onclick="this.closest('div[style*=inset]').remove()" '
+      + 'style="flex:1;padding:12px;border:1.5px solid #ccc;border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer;">Batal</button>'
+      + '<button onclick="confirmLoadLast()" '
+      + 'style="flex:1;padding:12px;border:none;border-radius:10px;background:#1B4332;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Ya, Muat</button>'
+      + '</div></div>';
+    document.body.appendChild(banner);
+    window._lastSubmissionBanner = banner;
+  } catch(e) {
+    showError('Gagal memuat data terakhir: ' + e.message);
+  }
+}
+
+function confirmLoadLast() {
+  if (window._lastSubmissionBanner) window._lastSubmissionBanner.remove();
+  try {
+    var saved = JSON.parse(localStorage.getItem('audit_etika_last_submission'));
+    auditInfo  = saved.info  || {};
+    auditItems = saved.items || {};
+    extraPhotos = { bersama: auditInfo.fotoBersama||'', commbook: auditInfo.fotoCommBook||'' };
+    // Simpan ke progress biasa supaya bisa di-restore
+    saveProgress();
+    // Rebuild form lalu langsung ke halaman info untuk edit
+    buildSectionScreens();
+    // Pre-fill info fields
+    var fields = {
+      'f-outlet': auditInfo.nomorOutlet,
+      'f-nama-outlet': auditInfo.namaOutlet,
+      'f-alamat': auditInfo.alamatKebun,
+      'f-auditor': auditInfo.namaAuditor,
+      'f-tanggal': auditInfo.tanggalAudit,
+      'f-posisi': auditInfo.posisiAuditor,
+      'f-email': auditInfo.emailPIC,
+    };
+    Object.keys(fields).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && fields[id]) el.value = fields[id];
+    });
+    // Set dropdowns
+    var katEl = document.getElementById('f-kategori');
+    var stEl  = document.getElementById('f-status');
+    if (katEl && auditInfo.kategoriAudit) katEl.value = auditInfo.kategoriAudit;
+    if (stEl  && auditInfo.statusKebun)   stEl.value  = auditInfo.statusKebun;
+    showScreen('screen-info');
+  } catch(e) {
+    showError('Gagal memuat: ' + e.message);
+  }
 }
 </script>
 </body>
