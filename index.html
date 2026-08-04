@@ -430,7 +430,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyGwGNAckji9ogphBy0S5psa9a3YLJKJ8VZXYQV8TeIAYwH-BHO3Oq0gWILti0aRdoE/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -863,27 +863,8 @@ function restoreProgress() {
   auditItems = saved.auditItems;
   currentSectionIdx = saved.currentSectionIdx || 0;
   buildSectionScreens();
-  // Restore visual state for all items
-  ITEMS.forEach(function(item) {
-    const resp = auditItems[item.code];
-    if (!resp) return;
-    const btnYa  = document.getElementById('btn-ya-' + item.code);
-    const btnTdk = document.getElementById('btn-tidak-' + item.code);
-    const card   = document.getElementById('card-' + item.code);
-    const cat    = document.getElementById('cat-' + item.code);
-    const thumb  = document.getElementById('foto-thumb-' + item.code);
-    const btn    = document.getElementById('foto-btn-' + item.code);
-    if (!btnYa) return;
-    if (!resp.comply) {
-      btnYa.classList.remove('selected');
-      btnTdk.classList.add('selected');
-      if (card) card.className = 'item-card noncomply';
-      if (cat)  { cat.classList.remove('hidden'); cat.value = resp.catatan || ''; }
-    }
-    if (resp.fotoUrl) {
-      if (btn)   { btn.classList.add('uploaded'); btn.innerHTML = '✅ Foto Tersimpan'; }
-    }
-  });
+  restoreItemVisuals(); // sync tampilan dengan auditItems
+  fillInfoFields(); // pastikan info fields terisi jika user back ke screen-info
   goToSection(currentSectionIdx);
 }
 
@@ -922,7 +903,54 @@ function submitInfo() {
   saveProgress();
 
   buildSectionScreens();
+  restoreItemVisuals(); // sync tampilan dengan data tersimpan
   goToSection(0);
+}
+
+// ── RESTORE ITEM VISUALS (sync tampilan dengan auditItems) ──────
+function restoreItemVisuals() {
+  ITEMS.forEach(function(item) {
+    var resp = auditItems[item.code];
+    if (!resp || resp.comply !== false) return; // comply = default Ya, skip
+
+    var card   = document.getElementById('card-'     + item.code);
+    var btnYa  = document.getElementById('btn-ya-'   + item.code);
+    var btnTdk = document.getElementById('btn-tidak-' + item.code);
+    var catEl  = document.getElementById('cat-'      + item.code);
+    var fotoBtn= document.getElementById('foto-btn-' + item.code);
+    if (!btnYa) return;
+
+    btnYa.classList.remove('selected');
+    btnTdk.classList.add('selected');
+    if (card)  card.className = 'item-card noncomply';
+    if (catEl) { catEl.classList.remove('hidden'); catEl.value = resp.catatan || ''; }
+    if (fotoBtn && resp.fotoUrl) {
+      fotoBtn.classList.add('uploaded');
+      fotoBtn.innerHTML = '✅ Foto Tersimpan';
+    }
+  });
+}
+
+// ── FILL INFO FIELDS (dari auditInfo ke DOM) ─────────────────────
+function fillInfoFields() {
+  var map = {
+    'f-outlet'     : 'nomorOutlet',
+    'f-nama-outlet': 'namaOutlet',
+    'f-alamat'     : 'alamatKebun',
+    'f-auditor'    : 'namaAuditor',
+    'f-tanggal'    : 'tanggalAudit',
+    'f-posisi'     : 'posisiAuditor',
+    'f-email'      : 'emailPIC',
+  };
+  Object.keys(map).forEach(function(elId) {
+    var el = document.getElementById(elId);
+    var val = auditInfo[map[elId]];
+    if (el && val) el.value = val;
+  });
+  var katEl = document.getElementById('f-kategori');
+  var stEl  = document.getElementById('f-status');
+  if (katEl && auditInfo.kategoriAudit) katEl.value = auditInfo.kategoriAudit;
+  if (stEl  && auditInfo.statusKebun)   stEl.value  = auditInfo.statusKebun;
 }
 
 // ── BUILD SECTION SCREENS ─────────────────────────────────────
@@ -1333,58 +1361,12 @@ function confirmLoadLast() {
     extraPhotos = { bersama: auditInfo.fotoBersama||'', commbook: auditInfo.fotoCommBook||'' };
     saveProgress();
 
-    // Rebuild section screens (semua default Ya)
+    // Rebuild section screens lalu sync visual state
     buildSectionScreens();
+    restoreItemVisuals();
 
-    // ── Restore visual state tiap item sesuai data yang dimuat ──
-    ITEMS.forEach(function(item) {
-      var resp = auditItems[item.code];
-      if (!resp || resp.comply) return; // comply = default Ya, skip
-
-      var card   = document.getElementById('card-'    + item.code);
-      var btnYa  = document.getElementById('btn-ya-'  + item.code);
-      var btnTdk = document.getElementById('btn-tidak-'+ item.code);
-      var catEl  = document.getElementById('cat-'     + item.code);
-      if (!btnYa) return;
-
-      // Set visual to Tidak
-      btnYa.classList.remove('selected');
-      btnTdk.classList.add('selected');
-      if (card)  card.className = 'item-card noncomply';
-      if (catEl) {
-        catEl.classList.remove('hidden');
-        catEl.value = resp.catatan || '';
-      }
-
-      // Restore foto jika ada
-      if (resp.fotoUrl) {
-        var fotoBtn = document.getElementById('foto-btn-' + item.code);
-        if (fotoBtn) {
-          fotoBtn.classList.add('uploaded');
-          fotoBtn.innerHTML = '✅ Foto Tersimpan';
-        }
-      }
-    });
-
-    // Pre-fill info fields
-    var fields = {
-      'f-outlet'     : auditInfo.nomorOutlet,
-      'f-nama-outlet': auditInfo.namaOutlet,
-      'f-alamat'     : auditInfo.alamatKebun,
-      'f-auditor'    : auditInfo.namaAuditor,
-      'f-tanggal'    : auditInfo.tanggalAudit,
-      'f-posisi'     : auditInfo.posisiAuditor,
-      'f-email'      : auditInfo.emailPIC,
-    };
-    Object.keys(fields).forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el && fields[id]) el.value = fields[id];
-    });
-    var katEl = document.getElementById('f-kategori');
-    var stEl  = document.getElementById('f-status');
-    if (katEl && auditInfo.kategoriAudit) katEl.value = auditInfo.kategoriAudit;
-    if (stEl  && auditInfo.statusKebun)   stEl.value  = auditInfo.statusKebun;
-
+    // Pre-fill info fields & langsung ke info screen untuk edit
+    fillInfoFields();
     showScreen('screen-info');
   } catch(e) {
     showError('Gagal memuat: ' + e.message);
