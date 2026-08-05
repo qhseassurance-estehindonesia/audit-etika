@@ -430,7 +430,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6zSGyyuPhsraL2dc5n989kDMEGm0KO2XOBqJJmzHYu_idztZEZr4Pg5wFBKFCACzY/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -673,6 +673,100 @@ function _markSig(id) {
   if (el) el.textContent = '✅ Tanda tangan terekam';
 }
 
+// ── RESTORE FOTO DARI URL (untuk revisi / reload) ────────────────
+function restoreFotoFromUrl(code, url) {
+  if (!url) return;
+  var btn   = document.getElementById('foto-btn-'   + code);
+  var thumb = document.getElementById('foto-thumb-' + code);
+  var status= document.getElementById('foto-status-'+ code);
+  if (btn) {
+    btn.classList.add('uploaded');
+    btn.innerHTML = '✅ Foto Tersimpan';
+  }
+  if (thumb) {
+    // Coba load thumbnail dari Drive preview URL
+    var fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch) {
+      thumb.src = 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w120';
+    } else {
+      thumb.src = url; // fallback jika bukan Drive URL
+    }
+    thumb.classList.add('show');
+    thumb.style.cursor = 'pointer';
+    thumb.title = 'Klik untuk buka foto di Drive';
+    thumb.onclick = function() { window.open(url, '_blank'); };
+  }
+  if (status) status.textContent = 'Tersimpan';
+}
+
+function restoreExtraFotoFromUrl(key, url) {
+  if (!url) return;
+  var btn   = document.getElementById('foto-btn-'   + key);
+  var thumb = document.getElementById('foto-thumb-' + key);
+  var status= document.getElementById('foto-status-'+ key);
+  extraPhotos[key] = url;
+  if (btn) { btn.classList.add('uploaded'); btn.innerHTML = '✅ Foto Tersimpan'; }
+  if (thumb) {
+    var fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch) {
+      thumb.src = 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w120';
+    } else {
+      thumb.src = url;
+    }
+    thumb.classList.add('show');
+    thumb.style.cursor = 'pointer';
+    thumb.title = 'Klik untuk buka foto di Drive';
+    thumb.onclick = function(u){ return function(){ window.open(u,'_blank'); }; }(url);
+  }
+  if (status) status.textContent = 'Tersimpan';
+}
+
+// ── RESTORE SIGNATURE SCREEN ──────────────────────────────────────
+// Dipanggil saat showSignatureScreen — restore TTD & foto dari data tersimpan
+function restoreSignatureScreen() {
+  // Restore signature preview (canvas tetap kosong, tapi show preview dari Drive URL)
+  ['auditor','pic'].forEach(function(id) {
+    var url = id === 'auditor' ? auditInfo.signAuditor : auditInfo.signPIC;
+    if (!url || url.length < 10) return;
+    var canvas  = document.getElementById('canvas-' + id);
+    var statusEl= document.getElementById('sig-' + id + '-status');
+    var fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (canvas && fileIdMatch) {
+      // Draw preview image onto canvas
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function() {
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Scale to fit canvas
+        var scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        var x = (canvas.width  - img.width  * scale) / 2;
+        var y = (canvas.height - img.height * scale) / 2;
+        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        sigState[id] = true;
+        if (statusEl) statusEl.textContent = '✅ Tanda tangan terekam (dari sesi sebelumnya)';
+      };
+      img.onerror = function() {
+        // Fallback: just mark as signed without visual
+        sigState[id] = true;
+        if (statusEl) statusEl.textContent = '✅ TTD tersimpan (klik Ulangi jika mau TTD ulang)';
+      };
+      img.src = 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w300';
+    }
+  });
+
+  // Restore extra photos
+  if (auditInfo.fotoBersama)  restoreExtraFotoFromUrl('bersama',  auditInfo.fotoBersama);
+  if (auditInfo.fotoCommBook) restoreExtraFotoFromUrl('commbook', auditInfo.fotoCommBook);
+
+  // Restore nama & jabatan PIC
+  var picNamaEl = document.getElementById('f-pic-nama');
+  var picJabEl  = document.getElementById('f-pic-jabatan');
+  if (picNamaEl && auditInfo.namaPIC)    picNamaEl.value = auditInfo.namaPIC;
+  if (picJabEl  && auditInfo.jabatanPIC) picJabEl.value  = auditInfo.jabatanPIC;
+}
+
 // Init saat page load — canvas punya width/height dari HTML attribute
 _attachSigPad('auditor');
 _attachSigPad('pic');
@@ -722,6 +816,10 @@ function initSigPad(id)   {}
 
 function showSignatureScreen() {
   showScreen('screen-signature');
+  // Jika ada data tersimpan (signAuditor/PIC/foto), restore tampilannya
+  setTimeout(function() {
+    restoreSignatureScreen();
+  }, 100);
 }
 
 // ── EXTRA PHOTOS (foto bersama & communication book) ────────────
@@ -772,6 +870,9 @@ async function submitSignatures() {
   var picJabatan = document.getElementById('f-pic-jabatan').value.trim();
   if (!picNama)    { showError('Nama PIC Outlet wajib diisi!');    document.getElementById('f-pic-nama').focus();    return; }
   if (!picJabatan) { showError('Jabatan PIC Outlet wajib diisi!'); document.getElementById('f-pic-jabatan').focus(); return; }
+  // Validasi foto dokumentasi wajib diisi
+  if (!extraPhotos.bersama)  { showError('Foto Bersama Auditor & Auditee wajib diupload!');  return; }
+  if (!extraPhotos.commbook) { showError('Foto Communication Book wajib diupload!'); return; }
 
   auditInfo.namaPIC      = picNama;
   auditInfo.jabatanPIC   = picJabatan;
@@ -862,8 +963,18 @@ function restoreProgress() {
   auditInfo = saved.auditInfo;
   auditItems = saved.auditItems;
   currentSectionIdx = saved.currentSectionIdx || 0;
+  // Restore extraPhotos dari auditInfo
+  extraPhotos = {
+    bersama : (auditInfo && auditInfo.fotoBersama)  || '',
+    commbook: (auditInfo && auditInfo.fotoCommBook) || ''
+  };
   buildSectionScreens();
   restoreItemVisuals(); // sync tampilan dengan auditItems
+  // Restore item foto thumbnails
+  ITEMS.forEach(function(item) {
+    var resp = auditItems[item.code];
+    if (resp && resp.fotoUrl) restoreFotoFromUrl(item.code, resp.fotoUrl);
+  });
   fillInfoFields(); // pastikan info fields terisi jika user back ke screen-info
   goToSection(currentSectionIdx);
 }
@@ -1364,6 +1475,11 @@ function confirmLoadLast() {
     // Rebuild section screens lalu sync visual state
     buildSectionScreens();
     restoreItemVisuals();
+    // Restore item foto thumbnails
+    ITEMS.forEach(function(item) {
+      var resp = auditItems[item.code];
+      if (resp && resp.fotoUrl) restoreFotoFromUrl(item.code, resp.fotoUrl);
+    });
 
     // Pre-fill info fields & langsung ke info screen untuk edit
     fillInfoFields();
