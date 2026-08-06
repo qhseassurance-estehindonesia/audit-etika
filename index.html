@@ -430,7 +430,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxLPk-ADiiKSnX5N8cebbqaYx3pODRxKnJOme92WS7Ph9rT1c6vOsHG06ZSNasPltN7/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -722,45 +722,43 @@ function restoreExtraFotoFromUrl(key, url) {
 }
 
 // ── RESTORE SIGNATURE SCREEN ──────────────────────────────────────
-// Dipanggil saat showSignatureScreen — restore TTD & foto dari data tersimpan
 function restoreSignatureScreen() {
-  // Restore signature preview (canvas tetap kosong, tapi show preview dari Drive URL)
+  // 1. Restore TTD dari Drive URL
   ['auditor','pic'].forEach(function(id) {
-    var url = id === 'auditor' ? auditInfo.signAuditor : auditInfo.signPIC;
+    var url = id === 'auditor' ? (auditInfo.signAuditor||'') : (auditInfo.signPIC||'');
+    var statusEl = document.getElementById('sig-' + id + '-status');
+    var canvas   = document.getElementById('canvas-' + id);
     if (!url || url.length < 10) return;
-    var canvas  = document.getElementById('canvas-' + id);
-    var statusEl= document.getElementById('sig-' + id + '-status');
-    var fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (canvas && fileIdMatch) {
-      // Draw preview image onto canvas
+
+    // Mark as signed regardless
+    sigState[id] = true;
+    if (statusEl) statusEl.textContent = '✅ TTD tersimpan — klik Ulangi jika ingin TTD ulang';
+
+    // Try to draw preview on canvas
+    var m = url.match(/[?&]id=([^&]+)|\/d\/([a-zA-Z0-9_-]+)/);
+    var fileId = m ? (m[1]||m[2]) : null;
+    if (canvas && fileId) {
       var img = new Image();
-      img.crossOrigin = 'anonymous';
       img.onload = function() {
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Scale to fit canvas
-        var scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-        var x = (canvas.width  - img.width  * scale) / 2;
-        var y = (canvas.height - img.height * scale) / 2;
-        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-        sigState[id] = true;
-        if (statusEl) statusEl.textContent = '✅ Tanda tangan terekam (dari sesi sebelumnya)';
+        try {
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          var s = Math.min(canvas.width/img.width, canvas.height/img.height);
+          ctx.drawImage(img, (canvas.width-img.width*s)/2, (canvas.height-img.height*s)/2, img.width*s, img.height*s);
+        } catch(e) {}
       };
-      img.onerror = function() {
-        // Fallback: just mark as signed without visual
-        sigState[id] = true;
-        if (statusEl) statusEl.textContent = '✅ TTD tersimpan (klik Ulangi jika mau TTD ulang)';
-      };
-      img.src = 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w300';
+      img.src = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w300';
     }
   });
 
-  // Restore extra photos
-  if (auditInfo.fotoBersama)  restoreExtraFotoFromUrl('bersama',  auditInfo.fotoBersama);
-  if (auditInfo.fotoCommBook) restoreExtraFotoFromUrl('commbook', auditInfo.fotoCommBook);
+  // 2. Restore foto dokumentasi
+  var fb = auditInfo.fotoBersama  || extraPhotos.bersama  || '';
+  var cb = auditInfo.fotoCommBook || extraPhotos.commbook || '';
+  if (fb) restoreExtraFotoFromUrl('bersama',  fb);
+  if (cb) restoreExtraFotoFromUrl('commbook', cb);
 
-  // Restore nama & jabatan PIC
+  // 3. Restore nama & jabatan PIC
   var picNamaEl = document.getElementById('f-pic-nama');
   var picJabEl  = document.getElementById('f-pic-jabatan');
   if (picNamaEl && auditInfo.namaPIC)    picNamaEl.value = auditInfo.namaPIC;
@@ -816,10 +814,13 @@ function initSigPad(id)   {}
 
 function showSignatureScreen() {
   showScreen('screen-signature');
-  // Jika ada data tersimpan (signAuditor/PIC/foto), restore tampilannya
-  setTimeout(function() {
-    restoreSignatureScreen();
-  }, 100);
+  // Restore data tersimpan setelah render selesai
+  // Gunakan double rAF untuk pastikan DOM sudah visible
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      restoreSignatureScreen();
+    });
+  });
 }
 
 // ── EXTRA PHOTOS (foto bersama & communication book) ────────────
@@ -1022,22 +1023,25 @@ function submitInfo() {
 function restoreItemVisuals() {
   ITEMS.forEach(function(item) {
     var resp = auditItems[item.code];
-    if (!resp || resp.comply !== false) return; // comply = default Ya, skip
+    if (!resp) return;
 
-    var card   = document.getElementById('card-'     + item.code);
-    var btnYa  = document.getElementById('btn-ya-'   + item.code);
-    var btnTdk = document.getElementById('btn-tidak-' + item.code);
-    var catEl  = document.getElementById('cat-'      + item.code);
-    var fotoBtn= document.getElementById('foto-btn-' + item.code);
-    if (!btnYa) return;
+    // Restore comply visual
+    if (resp.comply === false) {
+      var card   = document.getElementById('card-'     + item.code);
+      var btnYa  = document.getElementById('btn-ya-'   + item.code);
+      var btnTdk = document.getElementById('btn-tidak-' + item.code);
+      var catEl  = document.getElementById('cat-'      + item.code);
+      if (btnYa) {
+        btnYa.classList.remove('selected');
+        btnTdk.classList.add('selected');
+        if (card)  card.className = 'item-card noncomply';
+        if (catEl) { catEl.classList.remove('hidden'); catEl.value = resp.catatan || ''; }
+      }
+    }
 
-    btnYa.classList.remove('selected');
-    btnTdk.classList.add('selected');
-    if (card)  card.className = 'item-card noncomply';
-    if (catEl) { catEl.classList.remove('hidden'); catEl.value = resp.catatan || ''; }
-    if (fotoBtn && resp.fotoUrl) {
-      fotoBtn.classList.add('uploaded');
-      fotoBtn.innerHTML = '✅ Foto Tersimpan';
+    // Restore foto thumbnail — always, regardless of comply status
+    if (resp.fotoUrl) {
+      restoreFotoFromUrl(item.code, resp.fotoUrl);
     }
   });
 }
@@ -1475,11 +1479,6 @@ function confirmLoadLast() {
     // Rebuild section screens lalu sync visual state
     buildSectionScreens();
     restoreItemVisuals();
-    // Restore item foto thumbnails
-    ITEMS.forEach(function(item) {
-      var resp = auditItems[item.code];
-      if (resp && resp.fotoUrl) restoreFotoFromUrl(item.code, resp.fotoUrl);
-    });
 
     // Pre-fill info fields & langsung ke info screen untuk edit
     fillInfoFields();
