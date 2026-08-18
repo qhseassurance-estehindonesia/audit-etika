@@ -322,11 +322,11 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
       <div style="background:#fff;border-radius:12px;padding:12px;box-shadow:var(--shadow);margin-bottom:12px;">
         <div class="field" style="margin-bottom:12px;">
           <label>Nama PIC Outlet <span style="color:var(--red-600)">*</span></label>
-          <input type="text" id="f-pic-nama" placeholder="Nama lengkap PIC" autocomplete="off">
+          <input type="text" id="f-pic-nama" placeholder="Nama lengkap PIC" autocomplete="off" oninput="auditInfo.namaPIC=this.value;saveProgress();">
         </div>
         <div class="field">
           <label>Jabatan PIC Outlet <span style="color:var(--red-600)">*</span></label>
-          <input type="text" id="f-pic-jabatan" placeholder="Contoh: Store Manager, Supervisor" autocomplete="off">
+          <input type="text" id="f-pic-jabatan" placeholder="Contoh: Store Manager, Supervisor" autocomplete="off" oninput="auditInfo.jabatanPIC=this.value;saveProgress();">
         </div>
       </div>
       <div style="background:#fff;border-radius:12px;padding:12px;box-shadow:var(--shadow);">
@@ -430,7 +430,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
 // ⚙️  GANTI URL INI dengan URL deployment Apps Script kamu
 //     Ambil dari: Apps Script → Deploy → Manage deployments → copy URL
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-kvS7j37k3dP4iAPmgGuLo9K_x_DtJgzxOVMHZeCyZq-8NLmR4WzHKUxh8wnQNs9P/exec';
+const APPS_SCRIPT_URL = 'PASTE_APPS_SCRIPT_URL_DISINI';
 
 // ── DATA DARI SERVER ─────────────────────────────────────────
 const ITEMS = [
@@ -723,46 +723,56 @@ function restoreExtraFotoFromUrl(key, url) {
 
 // ── RESTORE SIGNATURE SCREEN ──────────────────────────────────────
 function restoreSignatureScreen() {
-  // 1. Restore TTD dari Drive URL
+  // 1. Restore TTD — tampilkan preview via <img> bukan draw ke canvas
+  //    (avoid cross-origin canvas SecurityError)
   ['auditor','pic'].forEach(function(id) {
     var url = id === 'auditor' ? (auditInfo.signAuditor||'') : (auditInfo.signPIC||'');
     var statusEl = document.getElementById('sig-' + id + '-status');
     var canvas   = document.getElementById('canvas-' + id);
     if (!url || url.length < 10) return;
 
-    // Mark as signed regardless
+    // Mark as signed (restored) — ctx tidak di-set supaya uploadSig tahu ini TTD lama
     sigState[id] = true;
-    if (statusEl) statusEl.textContent = '✅ TTD tersimpan — klik Ulangi jika ingin TTD ulang';
+    delete _sigCtx[id]; // hapus ctx reference sebagai sinyal "TTD dari restore, bukan baru"
 
-    // Try to draw preview on canvas
-    var m = url.match(/[?&]id=([^&]+)|\/d\/([a-zA-Z0-9_-]+)/);
-    var fileId = m ? (m[1]||m[2]) : null;
-    if (canvas && fileId) {
-      var img = new Image();
-      img.onload = function() {
-        try {
-          var ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          var s = Math.min(canvas.width/img.width, canvas.height/img.height);
-          ctx.drawImage(img, (canvas.width-img.width*s)/2, (canvas.height-img.height*s)/2, img.width*s, img.height*s);
-        } catch(e) {}
-      };
-      img.src = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w300';
+    // Show status
+    if (statusEl) statusEl.innerHTML =
+      '✅ TTD tersimpan &nbsp;|&nbsp; <a href="' + url + '" target="_blank" style="color:#1B4332;font-size:11px;">Lihat TTD sebelumnya</a>'
+      + ' &nbsp;|&nbsp; <span style="font-size:11px;color:#666;">Klik Ulangi jika mau TTD ulang</span>';
+
+    // Draw preview di canvas (tanpa crossOrigin untuk hindari taint)
+    if (canvas) {
+      var m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (m) {
+        var previewUrl = 'https://lh3.googleusercontent.com/d/' + m[1] + '=w300';
+        var img = new Image();
+        img.onload = function() {
+          var ctx2 = canvas.getContext('2d');
+          ctx2.fillStyle = '#FFFFFF';
+          ctx2.fillRect(0, 0, canvas.width, canvas.height);
+          var s = Math.min(canvas.width/this.width, canvas.height/this.height);
+          ctx2.drawImage(this, (canvas.width-this.width*s)/2, (canvas.height-this.height*s)/2, this.width*s, this.height*s);
+        };
+        img.src = previewUrl;
+      }
     }
   });
 
   // 2. Restore foto dokumentasi
   var fb = auditInfo.fotoBersama  || extraPhotos.bersama  || '';
   var cb = auditInfo.fotoCommBook || extraPhotos.commbook || '';
-  if (fb) restoreExtraFotoFromUrl('bersama',  fb);
-  if (cb) restoreExtraFotoFromUrl('commbook', cb);
+  if (fb) { extraPhotos.bersama  = fb; restoreExtraFotoFromUrl('bersama',  fb); }
+  if (cb) { extraPhotos.commbook = cb; restoreExtraFotoFromUrl('commbook', cb); }
 
-  // 3. Restore nama & jabatan PIC
-  var picNamaEl = document.getElementById('f-pic-nama');
-  var picJabEl  = document.getElementById('f-pic-jabatan');
-  if (picNamaEl && auditInfo.namaPIC)    picNamaEl.value = auditInfo.namaPIC;
-  if (picJabEl  && auditInfo.jabatanPIC) picJabEl.value  = auditInfo.jabatanPIC;
+  // 3. Restore nama & jabatan PIC (retry-safe)
+  function fillPIC() {
+    var picNamaEl = document.getElementById('f-pic-nama');
+    var picJabEl  = document.getElementById('f-pic-jabatan');
+    if (picNamaEl && auditInfo.namaPIC)    picNamaEl.value = auditInfo.namaPIC;
+    if (picJabEl  && auditInfo.jabatanPIC) picJabEl.value  = auditInfo.jabatanPIC;
+  }
+  fillPIC();
+  setTimeout(fillPIC, 200); // retry sekali lagi jika DOM belum siap
 }
 
 // Init saat page load — canvas punya width/height dari HTML attribute
@@ -885,8 +895,15 @@ async function submitSignatures() {
   var tanggal = auditInfo.tanggalAudit || new Date().toISOString().split('T')[0];
 
   async function uploadSig(id) {
+    // Jika sudah ada Drive URL dari sesi sebelumnya, reuse saja (skip re-upload)
+    var existingUrl = id === 'auditor' ? auditInfo.signAuditor : auditInfo.signPIC;
+    if (existingUrl && existingUrl.startsWith('http') && sigState[id] && !_sigCtx[id]) {
+      // sigState true tapi ctx tidak ada = restored dari data lama, bukan TTD baru
+      return existingUrl;
+    }
+    // Jika TTD baru digambar (ctx ada dan punya drawing), upload baru
     var dataUrl = getSigDataURL(id);
-    if (!dataUrl) return '';
+    if (!dataUrl) return existingUrl || ''; // fallback ke URL lama
     try {
       var r = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
@@ -1156,72 +1173,95 @@ function setAnswer(code, comply) {
 
 // ── FOTO UPLOAD ───────────────────────────────────────────────
 async function handleFotoSelect(event, code) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const btn    = document.getElementById('foto-btn-' + code);
-  const thumb  = document.getElementById('foto-thumb-' + code);
-  const status = document.getElementById('foto-status-' + code);
+  var files = Array.from(event.target.files);
+  if (!files.length) return;
+
+  // Max 3 file per item
+  if (!auditItems[code].fotoUrls) auditItems[code].fotoUrls = [];
+  var existing = auditItems[code].fotoUrls.length;
+  var canAdd   = Math.max(0, 3 - existing);
+  files = files.slice(0, canAdd);
+  if (files.length === 0) {
+    showError('Maksimal 3 foto/video per item. Hapus dulu yang ada jika ingin ganti.');
+    return;
+  }
+
+  var btn       = document.getElementById('foto-btn-'    + code);
+  var status    = document.getElementById('foto-status-' + code);
+  var container = document.getElementById('foto-thumbs-' + code);
+  var tanggal   = auditInfo.tanggalAudit || new Date().toISOString().split('T')[0];
 
   btn.classList.add('uploading');
-  btn.innerHTML = '⏳ Mengupload...';
-  status.textContent = '';
+  btn.innerHTML = String.fromCodePoint(0x23F3) + ' Mengupload ' + files.length + ' file...';
+  if (status) status.textContent = '';
 
-  try {
-    // 1. Compress image
-    const compressed = await compressImage(file);
+  for (var i = 0; i < files.length; i++) {
+    var file    = files[i];
+    var isVideo = file.type.startsWith('video/');
+    try {
+      var dataUrl, fileName;
+      if (isVideo) {
+        dataUrl  = await fileToBase64(file);
+        var ext  = file.name.split('.').pop() || 'mp4';
+        fileName = code + '_' + Date.now() + '_' + i + '.' + ext;
+      } else {
+        dataUrl  = await compressImage(file);
+        fileName = code + '_' + Date.now() + '_' + i + '.jpg';
+      }
 
-    // 2. Show local preview immediately
-    thumb.src = compressed;
-    thumb.classList.add('show');
+      // Local preview
+      if (container) {
+        if (isVideo) {
+          var span = document.createElement('span');
+          span.textContent = String.fromCodePoint(0x1F3AC);
+          span.style.cssText = 'font-size:28px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:#f0f0f0;border-radius:6px;';
+          container.appendChild(span);
+        } else {
+          var imgEl = document.createElement('img');
+          imgEl.src = dataUrl;
+          imgEl.style.cssText = 'width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid #74C69D;';
+          container.appendChild(imgEl);
+        }
+      }
 
-    // 3. Upload ke Drive via Apps Script
-    const fileName = code + '_' + Date.now() + '.jpg';
-    const tanggal  = auditInfo.tanggalAudit || new Date().toISOString().split('T')[0];
-
-    fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({action:'upload_photo', base64Data:compressed, fileName:fileName,
-                            nomorOutlet:auditInfo.nomorOutlet, tanggal:tanggal})
-    })
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text(); // pakai text() dulu, lebih aman dari json()
-    })
-    .then(function(txt) {
-      var result;
-      try { result = JSON.parse(txt); }
-      catch(e) { throw new Error('Response bukan JSON: ' + txt.substring(0,100)); }
+      // Upload to Drive
+      var r   = await fetch(APPS_SCRIPT_URL, {
+        method : 'POST',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body   : JSON.stringify({
+          action: 'upload_photo', base64Data: dataUrl, fileName: fileName,
+          nomorOutlet: auditInfo.nomorOutlet || 'doc', tanggal: tanggal
+        })
+      });
+      var result = JSON.parse(await r.text());
       if (result.success) {
-        auditItems[code].fotoUrl = result.url;
-        btn.classList.remove('uploading');
-        btn.classList.add('uploaded');
-        btn.innerHTML = '✅ Foto Tersimpan';
-        status.textContent = 'Drive ✓';
+        auditItems[code].fotoUrls.push(result.url);
+        auditItems[code].fotoUrl = auditItems[code].fotoUrls[0];
         saveProgress();
       } else {
-        throw new Error(result.message || 'Server error');
+        throw new Error(result.message || 'Upload gagal');
       }
-    })
-    .catch(function(err) {
-      btn.classList.remove('uploading');
-      btn.innerHTML = '⚠️ Coba Lagi';
-      // Tampilkan pesan error yang lebih jelas untuk debugging
-      var msg = err.message || 'Unknown error';
-      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-        status.textContent = 'Cek koneksi / URL Apps Script';
-      } else {
-        status.textContent = msg.substring(0, 60);
-      }
-      console.error('Upload error:', err);
-    });
-
-  } catch(e) {
-    btn.classList.remove('uploading');
-    btn.innerHTML = '⚠️ Coba Lagi';
-    status.textContent = 'Error: ' + e.message;
+    } catch(e) {
+      if (status) status.textContent = 'Gagal upload file ' + (i+1) + ': ' + (e.message||'').substring(0, 50);
+    }
   }
+
+  var total = auditItems[code].fotoUrls.length;
+  btn.classList.remove('uploading');
+  btn.classList.add('uploaded');
+  btn.innerHTML = String.fromCodePoint(0x2705) + ' ' + total + '/3 File Tersimpan';
+  if (status) status.textContent = total + ' file di Drive';
 }
+
+function fileToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload  = function(e) { resolve(e.target.result); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 
 // Compress image ke max 900px, 75% quality
 function compressImage(file) {
@@ -1254,8 +1294,32 @@ function goToSection(idx) {
 }
 
 function nextSection(currentIdx) {
+  // Cek mandatory: catatan wajib diisi jika pilih "Tidak"
+  var secKey   = SECTION_KEYS[currentIdx];
+  var secItems = ITEMS.filter(function(i){ return i.section === secKey; });
+  var missing  = [];
+  secItems.forEach(function(item) {
+    var resp = auditItems[item.code];
+    if (resp && resp.comply === false && !resp.catatan.trim()) {
+      missing.push(item.code);
+    }
+  });
+  if (missing.length > 0) {
+    // Highlight dan scroll ke item pertama yang kosong
+    var firstEl = document.getElementById('cat-' + missing[0]);
+    if (firstEl) { firstEl.style.borderColor = 'var(--red-600)'; firstEl.focus(); }
+    showError('Catatan wajib diisi untuk item yang TIDAK comply: ' + missing.join(', '));
+    setTimeout(function() {
+      missing.forEach(function(code) {
+        var el = document.getElementById('cat-' + code);
+        if (el) el.style.borderColor = '';
+      });
+    }, 3000);
+    return; // jangan pindah section
+  }
+
   if (currentIdx === SECTION_KEYS.length - 1) {
-    showSignatureScreen();  // ke tanda tangan dulu sebelum review
+    showSignatureScreen();
   } else {
     goToSection(currentIdx + 1);
   }
