@@ -248,7 +248,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
   <h1 class="splash-title">Form Audit ETIKA</h1>
   <p class="splash-sub">Esteh Indonesia<br>Food Safety · Brand Standards · Local Standards</p>
   <button class="splash-btn" onclick="startForm()">Mulai Audit →</button>
-  <p class="splash-info">84 checklist item · Foto dari kamera atau galeri · Maks 3/item</p>
+  <p class="splash-info">84 checklist item · Foto dari kamera atau galeri · Maks 3/item<br>📷 Foto maks 50 MB · 🎥 Video maks 35 MB (±15 dtk di 1080p, ±30 dtk di 720p)</p>
 </div>
 
 <!-- ── INFORMASI AUDIT ──────────────────────────────────── -->
@@ -282,7 +282,8 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
       </div>
       <div class="field">
         <label>Alamat Kebun <span style="color:var(--red-600)">*</span></label>
-        <input type="text" id="f-alamat" placeholder="Alamat lengkap outlet" autocomplete="off">
+        <input type="text" id="f-alamat" placeholder="Alamat lengkap + provinsi, mis. Jl. Pajajaran No. 1, Bogor, Jawa Barat" autocomplete="off" oninput="updateProvinsiHint()">
+        <div id="f-alamat-hint" style="font-size:12px;line-height:1.4;min-height:16px;"></div>
       </div>
       <div class="field">
         <label>Nama Auditor <span style="color:var(--red-600)">*</span></label>
@@ -313,6 +314,14 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
           <option>Sementara Tutup</option>
           <option>Renovasi</option>
           <option>Grand Opening</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Kategori Kebun <span style="color:var(--red-600)">*</span></label>
+        <select id="f-kategori-kebun">
+          <option value="">-- Pilih --</option>
+          <option>Operate by Management</option>
+          <option>Operate by Mitra</option>
         </select>
       </div>
       <div class="field">
@@ -399,10 +408,10 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
       <p style="font-size:13px;font-weight:600;color:var(--gray-900);margin-bottom:4px;">📸 Foto Bersama Auditor &amp; Auditee</p>
       <p style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Bukti kehadiran audit</p>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="file" accept="image/*,video/*" capture="environment" class="foto-input" id="foto-cam-bersama" onchange="handleExtraPhoto(event,'bersama')">
+        <input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-cam-bersama" onchange="handleExtraPhoto(event,'bersama')">
         <input type="file" accept="image/*,video/*" class="foto-input" id="foto-input-bersama" onchange="handleExtraPhoto(event,'bersama')">
         <label class="foto-btn" id="foto-btn-bersama" style="font-size:12px;padding:8px 10px;" for="foto-cam-bersama">📷 Kamera</label>
-        <label class="foto-btn" style="font-size:12px;padding:8px 10px;" for="foto-input-bersama">🖼 Galeri</label>
+        <label class="foto-btn" style="font-size:12px;padding:8px 10px;" id="foto-gal-bersama" for="foto-input-bersama">🖼 Galeri</label>
         <button type="button" class="foto-btn" id="foto-remove-bersama" style="display:none;font-size:12px;padding:8px 10px;color:var(--red-600);border-color:var(--red-600);" onclick="removeExtraFoto('bersama')">🗑 Hapus</button>
         <img class="foto-thumb" id="foto-thumb-bersama">
         <span class="upload-status" id="foto-status-bersama"></span>
@@ -413,10 +422,10 @@ html, body { height: 100%; background: var(--bg); font-family: 'Plus Jakarta San
       <p style="font-size:13px;font-weight:600;color:var(--gray-900);margin-bottom:4px;">📖 Foto Communication Book</p>
       <p style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Hasil pengisian communication book di outlet</p>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <input type="file" accept="image/*,video/*" capture="environment" class="foto-input" id="foto-cam-commbook" onchange="handleExtraPhoto(event,'commbook')">
+        <input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-cam-commbook" onchange="handleExtraPhoto(event,'commbook')">
         <input type="file" accept="image/*,video/*" class="foto-input" id="foto-input-commbook" onchange="handleExtraPhoto(event,'commbook')">
         <label class="foto-btn" id="foto-btn-commbook" style="font-size:12px;padding:8px 10px;" for="foto-cam-commbook">📷 Kamera</label>
-        <label class="foto-btn" style="font-size:12px;padding:8px 10px;" for="foto-input-commbook">🖼 Galeri</label>
+        <label class="foto-btn" style="font-size:12px;padding:8px 10px;" id="foto-gal-commbook" for="foto-input-commbook">🖼 Galeri</label>
         <button type="button" class="foto-btn" id="foto-remove-commbook" style="display:none;font-size:12px;padding:8px 10px;color:var(--red-600);border-color:var(--red-600);" onclick="removeExtraFoto('commbook')">🗑 Hapus</button>
         <img class="foto-thumb" id="foto-thumb-commbook">
         <span class="upload-status" id="foto-status-commbook"></span>
@@ -644,6 +653,19 @@ let auditItems     = {};
 let currentSectionIdx = 0;
 const SECTION_KEYS = Object.keys(SECTION_LABELS);
 const STORAGE_KEY  = 'audit_etika_progress';
+const LIMIT_IMG_MB   = 50;
+const LIMIT_VIDEO_MB = 35;
+const PENDING_KEY  = 'audit_etika_pending_capture';
+var uploadsInFlight = 0;
+function setPendingCapture(target) { try { localStorage.setItem(PENDING_KEY, JSON.stringify({ target: target, ts: Date.now() })); } catch(e) {} }
+function clearPendingCapture()     { try { localStorage.removeItem(PENDING_KEY); } catch(e) {} }
+function readPendingCapture() {
+  try {
+    var p = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
+    if (p && Date.now() - p.ts < 15 * 60 * 1000) return p;
+  } catch(e) {}
+  return null;
+}
 
 // Inisialisasi semua item default = comply:true
 ITEMS.forEach(i => { auditItems[i.code] = { comply: true, catatan: '', fotoUrl: '' }; });
@@ -763,6 +785,30 @@ function _markSig(id) {
   }, 600);
 }
 
+
+// Muat gambar thumbnail Drive; kalau gagal (belum selesai diproses), coba lagi bertahap
+function retryThumbOnError(img, src) {
+  var delays = [3000, 5000, 8000, 12000, 20000, 30000, 45000, 60000, 90000], n = 0;
+  img.onerror = function() {
+    if (n >= delays.length) { img.onerror = null; return; }
+    var d = delays[n++];
+    setTimeout(function() {
+      if (!document.body.contains(img)) return;
+      img.src = src + (src.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+    }, d);
+  };
+  img.src = src;
+}
+
+
+// Tandai HANYA tombol yang dipakai auditor (Kamera atau Galeri) dengan outline hijau
+function setExtraUsedButton(key, via) {
+  var cam = document.getElementById('foto-btn-' + key);
+  var gal = document.getElementById('foto-gal-' + key);
+  if (cam) { cam.classList.remove('uploading'); cam.classList.toggle('uploaded', via === 'cam'); cam.innerHTML = '📷 Kamera'; }
+  if (gal) { gal.classList.remove('uploading'); gal.classList.toggle('uploaded', via === 'gal'); gal.innerHTML = '🖼 Galeri'; }
+}
+
 // ── RESTORE FOTO DARI URL (untuk revisi / reload) ────────────────
 function restoreFotoFromUrl(code, url) {
   if (!url) return;
@@ -776,7 +822,7 @@ function restoreFotoFromUrl(code, url) {
   if (thumb) {
     var fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (fileIdMatch) {
-      thumb.src = 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w120';
+      retryThumbOnError(thumb, 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w120');
     } else {
       thumb.src = url;
     }
@@ -794,11 +840,11 @@ function restoreExtraFotoFromUrl(key, url) {
   var thumb = document.getElementById('foto-thumb-' + key);
   var status= document.getElementById('foto-status-'+ key);
   extraPhotos[key] = url;
-  if (btn) { btn.classList.add('uploaded'); btn.innerHTML = '✅ Foto Tersimpan'; }
+  setExtraUsedButton(key, auditInfo['via' + key] || '');
   if (thumb) {
     var fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (fileIdMatch) {
-      thumb.src = 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w120';
+      retryThumbOnError(thumb, 'https://drive.google.com/thumbnail?id=' + fileIdMatch[1] + '&sz=w120');
     } else {
       thumb.src = url;
     }
@@ -933,13 +979,25 @@ function showSignatureScreen() {
 var extraPhotos = { bersama: '', commbook: '' };
 
 async function handleExtraPhoto(event, key) {
+  uploadsInFlight++;
+  try { await _handleExtraPhotoInner(event, key); }
+  finally { uploadsInFlight--; if (!uploadsInFlight) clearPendingCapture(); }
+}
+async function _handleExtraPhotoInner(event, key) {
   var file = event.target.files[0];
   if (!file) return;
-  var btn      = document.getElementById('foto-btn-' + key);
+  var usedGallery = (event.target.id || '').indexOf('foto-input-') === 0;
+  var btn      = document.getElementById((usedGallery ? 'foto-gal-' : 'foto-btn-') + key);
+  var btnLabel = usedGallery ? '🖼 Galeri' : '📷 Kamera';
   var thumb    = document.getElementById('foto-thumb-' + key);
   var status   = document.getElementById('foto-status-' + key);
   var removeBtn= document.getElementById('foto-remove-' + key);
   var isVideo  = file.type.startsWith('video/');
+  if (file.size > (isVideo ? LIMIT_VIDEO_MB : LIMIT_IMG_MB) * 1024 * 1024) {
+    showOversizeDialog([file]);
+    event.target.value = '';
+    return;
+  }
 
   if (btn) { btn.classList.add('uploading'); btn.innerHTML = '⏳ Mengupload...'; }
   if (status) status.textContent = 'Mengupload...';
@@ -962,19 +1020,21 @@ async function handleExtraPhoto(event, key) {
     var result = await postJSON(APPS_SCRIPT_URL, {
       action: 'upload_photo', base64Data: dataUrl,
       fileName: fileName, nomorOutlet: auditInfo.nomorOutlet || 'doc', tanggal: tanggal
-    }, isVideo ? 180000 : 60000);
+    }, isVideo ? 300000 : 60000, isVideo ? 1 : 2);
 
     if (result.success) {
       extraPhotos[key] = result.url;
       auditInfo.fotoBersama  = extraPhotos.bersama;
       auditInfo.fotoCommBook = extraPhotos.commbook;
       saveProgress();
-      if (btn) { btn.classList.remove('uploading'); btn.classList.add('uploaded'); btn.innerHTML = '✅ Foto Tersimpan'; }
+      auditInfo['via' + key] = usedGallery ? 'gal' : 'cam';
+      saveProgress();
+      setExtraUsedButton(key, auditInfo['via' + key]);
       if (status) status.textContent = 'Tersimpan';
       if (removeBtn) removeBtn.style.display = '';
     } else { throw new Error(result.message); }
   } catch(e) {
-    if (btn) { btn.classList.remove('uploading'); btn.innerHTML = '⚠️ Coba Lagi'; }
+    setExtraUsedButton(key, extraPhotos[key] ? (auditInfo['via' + key] || '') : '');
     if (status) status.textContent = e.name === 'AbortError'
       ? 'Timeout — koneksi terlalu lama, coba lagi'
       : 'Gagal upload: ' + (e.message || '').substring(0, 80);
@@ -984,6 +1044,8 @@ async function handleExtraPhoto(event, key) {
 }
 
 function removeExtraFoto(key) {
+  auditInfo['via' + key] = '';
+  setExtraUsedButton(key, '');
   extraPhotos[key] = '';
   if (key === 'bersama') auditInfo.fotoBersama = '';
   if (key === 'commbook') auditInfo.fotoCommBook = '';
@@ -1068,9 +1130,10 @@ function showError(msg) {
 }
 
 function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(id);
-  if (el) { el.classList.add('active'); el.scrollTop = 0; window.scrollTo(0,0); }
+  if (!el) { console.warn('showScreen: layar tidak ditemukan -> ' + id); return; }   // jangan sampai layar jadi kosong
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  el.classList.add('active'); el.scrollTop = 0; window.scrollTo(0,0);
 }
 
 // ── SPLASH → INFO ────────────────────────────────────────────
@@ -1136,6 +1199,108 @@ function discardProgress() {
   _startFresh();
 }
 
+// ── DAFTAR 38 PROVINSI + ALIAS ─────────────────────────────────────
+// Format: [nama resmi, [alias...]]. Alias ditulis huruf kecil tanpa tanda baca
+// ("." dan "," dianggap spasi). Pencocokan memakai KATA UTUH, jadi "bali" tidak
+// cocok dengan "Balikpapan". Mau tambah singkatan? Tambahkan di daftar alias.
+var PROVINSI_DATA_ = [
+  ['Aceh', ['aceh', 'nanggroe aceh darussalam', 'nad']],
+  ['Sumatera Utara', ['sumatera utara', 'sumatra utara', 'sumut']],
+  ['Sumatera Barat', ['sumatera barat', 'sumatra barat', 'sumbar']],
+  ['Riau', ['riau']],
+  ['Kepulauan Riau', ['kepulauan riau', 'kepri']],
+  ['Jambi', ['jambi']],
+  ['Sumatera Selatan', ['sumatera selatan', 'sumatra selatan', 'sumsel']],
+  ['Kepulauan Bangka Belitung', ['kepulauan bangka belitung', 'bangka belitung', 'babel']],
+  ['Bengkulu', ['bengkulu']],
+  ['Lampung', ['lampung']],
+  ['DKI Jakarta', ['dki jakarta', 'dki', 'daerah khusus ibukota jakarta', 'daerah khusus ibu kota jakarta', 'jakarta']],
+  ['Banten', ['banten']],
+  ['Jawa Barat', ['jawa barat', 'jabar']],
+  ['Jawa Tengah', ['jawa tengah', 'jateng']],
+  ['DI Yogyakarta', ['di yogyakarta', 'd i yogyakarta', 'daerah istimewa yogyakarta', 'diy', 'yogyakarta']],
+  ['Jawa Timur', ['jawa timur', 'jatim']],
+  ['Bali', ['bali']],
+  ['Nusa Tenggara Barat', ['nusa tenggara barat', 'ntb']],
+  ['Nusa Tenggara Timur', ['nusa tenggara timur', 'ntt']],
+  ['Kalimantan Barat', ['kalimantan barat', 'kalbar']],
+  ['Kalimantan Tengah', ['kalimantan tengah', 'kalteng']],
+  ['Kalimantan Selatan', ['kalimantan selatan', 'kalsel']],
+  ['Kalimantan Timur', ['kalimantan timur', 'kaltim']],
+  ['Kalimantan Utara', ['kalimantan utara', 'kaltara']],
+  ['Sulawesi Utara', ['sulawesi utara', 'sulut']],
+  ['Gorontalo', ['gorontalo']],
+  ['Sulawesi Tengah', ['sulawesi tengah', 'sulteng']],
+  ['Sulawesi Barat', ['sulawesi barat', 'sulbar']],
+  ['Sulawesi Selatan', ['sulawesi selatan', 'sulsel']],
+  ['Sulawesi Tenggara', ['sulawesi tenggara', 'sultra']],
+  ['Maluku', ['maluku']],
+  ['Maluku Utara', ['maluku utara', 'malut']],
+  ['Papua', ['papua']],
+  ['Papua Barat', ['papua barat']],
+  ['Papua Barat Daya', ['papua barat daya']],
+  ['Papua Selatan', ['papua selatan']],
+  ['Papua Tengah', ['papua tengah']],
+  ['Papua Pegunungan', ['papua pegunungan']]
+];
+
+// Nama provinsi yang muncul tepat setelah kata-kata ini dianggap NAMA JALAN, bukan provinsi
+// (mis. "Jl. Banten No. 5, Bandung" bukan di Provinsi Banten).
+var PROVINSI_KATA_JALAN_ = { jl: 1, jalan: 1, gg: 1, gang: 1, lorong: 1, lr: 1 };
+
+function normalisasiAlamatProvinsi_(s) {
+  return ' ' + String(s === null || s === undefined ? '' : s)
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/ +/g, ' ').trim() + ' ';
+}
+
+// Posisi AKHIR kemunculan alias (kata utuh) yang paling belakang dan bukan nama jalan; -1 kalau tidak ada.
+function posisiAkhirAliasProvinsi_(s, alias) {
+  var pat = ' ' + alias + ' ';
+  var dari = s.length;
+  while (dari >= 0) {
+    var idx = s.lastIndexOf(pat, dari);
+    if (idx < 0) return -1;
+    var sebelum = s.substring(0, idx).replace(/ +$/, '').split(' ').pop();
+    if (!PROVINSI_KATA_JALAN_[sebelum]) return idx + pat.length;
+    dari = idx - 1;
+  }
+  return -1;
+}
+
+/**
+ * Mengembalikan nama provinsi (nama resmi) dari teks alamat, atau '' kalau tidak ada.
+ * Aturan: alias yang kemunculannya paling BELAKANG di alamat yang menang (provinsi biasanya
+ * ditulis di akhir); kalau berakhir di posisi yang sama, alias yang lebih panjang menang
+ * (jadi "Kepulauan Riau" tidak terbaca "Riau").
+ */
+function deteksiProvinsi(alamat) {
+  var s = normalisasiAlamatProvinsi_(alamat);
+  if (s.trim() === '') return '';
+  var terbaik = '', akhirTerbaik = -1, panjangTerbaik = 0;
+  for (var i = 0; i < PROVINSI_DATA_.length; i++) {
+    var nama = PROVINSI_DATA_[i][0], alias = PROVINSI_DATA_[i][1];
+    for (var j = 0; j < alias.length; j++) {
+      var akhir = posisiAkhirAliasProvinsi_(s, alias[j]);
+      if (akhir < 0) continue;
+      if (akhir > akhirTerbaik || (akhir === akhirTerbaik && alias[j].length > panjangTerbaik)) {
+        terbaik = nama; akhirTerbaik = akhir; panjangTerbaik = alias[j].length;
+      }
+    }
+  }
+  return terbaik;
+}
+
+// Petunjuk langsung di bawah kolom alamat: provinsi terdeteksi atau belum
+function updateProvinsiHint() {
+  var el = document.getElementById('f-alamat'), box = document.getElementById('f-alamat-hint');
+  if (!el || !box) return;
+  var v = el.value.trim();
+  if (!v) { box.textContent = ''; return; }
+  var p = deteksiProvinsi(v);
+  if (p) { box.style.color = '#2D6A4F'; box.textContent = '\u2705 Provinsi terdeteksi: ' + p; }
+  else   { box.style.color = '#B45309'; box.textContent = '\u26A0\uFE0F Alamat belum mencantumkan provinsi. Tambahkan di akhir alamat, mis. "..., Bogor, Jawa Barat".'; }
+}
+
 // ── INFO SUBMIT ───────────────────────────────────────────────
 function submitInfo() {
   const outlet      = document.getElementById('f-outlet').value.trim();
@@ -1146,21 +1311,24 @@ function submitInfo() {
   const posisi   = document.getElementById('f-posisi').value.trim();
   const kategori = document.getElementById('f-kategori').value;
   const status   = document.getElementById('f-status').value;
+  const kategoriKebun = document.getElementById('f-kategori-kebun').value;
   const email    = document.getElementById('f-email').value.trim();
 
   if (!outlet)      { showError('Nomor Outlet wajib diisi!');    document.getElementById('f-outlet').focus();      return; }
   if (!namaOutlet)  { showError('Nama Outlet wajib diisi!');     document.getElementById('f-nama-outlet').focus(); return; }
   if (!alamat)      { showError('Alamat Kebun wajib diisi!');     document.getElementById('f-alamat').focus();      return; }
+  if (!deteksiProvinsi(alamat)) { showError('Alamat Kebun harus mencantumkan PROVINSI, mis. "..., Bogor, Jawa Barat".'); updateProvinsiHint(); document.getElementById('f-alamat').focus(); return; }
   if (!auditor)     { showError('Nama Auditor wajib diisi!');     document.getElementById('f-auditor').focus();     return; }
   if (!tanggal)     { showError('Tanggal Audit wajib diisi!');    document.getElementById('f-tanggal').focus();     return; }
   if (!posisi)      { showError('Posisi Auditor wajib diisi!');   document.getElementById('f-posisi').focus();      return; }
   if (!kategori)    { showError('Kategori Audit wajib dipilih!'); document.getElementById('f-kategori').focus();   return; }
   if (!status)      { showError('Status Kebun wajib dipilih!');   document.getElementById('f-status').focus();      return; }
+  if (!kategoriKebun) { showError('Kategori Kebun wajib dipilih!'); document.getElementById('f-kategori-kebun').focus(); return; }
   if (!email || !email.includes('@')) { alert('Format email tidak valid!'); return; }
 
   Object.assign(auditInfo, { nomorOutlet:outlet, namaOutlet:namaOutlet, alamatKebun:alamat,
                 namaAuditor:auditor, tanggalAudit:tanggal,
-                posisiAuditor:posisi, kategoriAudit:kategori, statusKebun:status, emailPIC:email });
+                posisiAuditor:posisi, kategoriAudit:kategori, statusKebun:status, kategoriKebun:kategoriKebun, emailPIC:email });
   saveProgress();
 
   buildSectionScreens();
@@ -1193,7 +1361,7 @@ function restoreItemVisuals() {
       var total  = resp.fotoUrls.length;
       if (status) status.textContent = total + '/3 file di Drive' + (total < 3 ? ' (bisa tambah lagi)' : '');
       var uploadLabels = document.querySelectorAll(
-        'label[for="foto-cam-' + item.code + '"], label[for="foto-input-' + item.code + '"]');
+        'label[for="foto-cam-' + item.code + '"], label[for="foto-vid-' + item.code + '"], label[for="foto-input-' + item.code + '"]');
       uploadLabels.forEach(function(l){ l.classList.add('uploaded'); l.style.borderStyle = 'solid'; });
     }
   });
@@ -1219,6 +1387,9 @@ function fillInfoFields() {
   var stEl  = document.getElementById('f-status');
   if (katEl && auditInfo.kategoriAudit) katEl.value = auditInfo.kategoriAudit;
   if (stEl  && auditInfo.statusKebun)   stEl.value  = auditInfo.statusKebun;
+  var kkEl = document.getElementById('f-kategori-kebun');
+  if (kkEl && auditInfo.kategoriKebun) kkEl.value = auditInfo.kategoriKebun;
+  updateProvinsiHint();
 }
 
 // ── BUILD SECTION SCREENS ─────────────────────────────────────
@@ -1252,7 +1423,7 @@ function buildSectionScreens() {
       <div class="content" id="content-${secKey}">
         <div class="section-card">
           <div class="section-card-name">${SECTION_LABELS[secKey]}</div>
-          <div class="section-card-sub">${sectionItems.length} item checklist · Tap ✅/❌ per item</div>
+          <div class="section-card-sub">${sectionItems.length} item checklist · Tap ✅/❌ per item<br>📎 Maks 3 file/item · 📷 foto maks 50 MB · 🎥 video maks 35 MB (±15 dtk di 1080p, ±30 dtk di 720p)</div>
         </div>
         ${buildSectionItemsHTML(sectionItems)}
       </div>
@@ -1306,11 +1477,17 @@ function buildItemHTML(item) {
     <textarea class="catatan-field hidden" id="cat-${item.code}" placeholder="📝 Catatan temuan..." rows="2"
       oninput="auditItems['${item.code}'].catatan=this.value"></textarea>
     <div class="foto-area" style="flex-wrap:wrap;gap:6px;">
-      <input type="file" accept="image/*,video/*" capture="environment" multiple class="foto-input"
+      <!-- KAMERA: foto langsung (image saja + TANPA multiple, supaya capture jalan) -->
+      <input type="file" accept="image/*" capture="environment" class="foto-input"
         id="foto-cam-${item.code}" onchange="handleFotoSelect(event,'${item.code}')">
+      <!-- VIDEO: rekam langsung -->
+      <input type="file" accept="video/*" capture="environment" class="foto-input"
+        id="foto-vid-${item.code}" onchange="handleFotoSelect(event,'${item.code}')">
+      <!-- GALERI: pilih dari galeri, boleh banyak -->
       <input type="file" accept="image/*,video/*" multiple class="foto-input"
         id="foto-input-${item.code}" onchange="handleFotoSelect(event,'${item.code}')">
       <label class="foto-btn" style="font-size:12px;padding:8px 10px;" for="foto-cam-${item.code}">📷 Kamera</label>
+      <label class="foto-btn" style="font-size:12px;padding:8px 10px;" for="foto-vid-${item.code}">🎥 Video</label>
       <label class="foto-btn" style="font-size:12px;padding:8px 10px;" for="foto-input-${item.code}">🖼 Galeri</label>
       <span class="upload-status" id="foto-status-${item.code}"></span>
       <div id="foto-thumbs-${item.code}" style="display:flex;gap:6px;flex-wrap:wrap;width:100%;margin-top:6px;"></div>
@@ -1351,6 +1528,36 @@ function renderItemThumbs(code) {
     thumbEl.style.cssText = 'width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid #74C69D;cursor:pointer;display:block;';
     thumbEl.title = 'Klik untuk lihat di Drive';
     thumbEl.onclick = function(){ window.open(url, '_blank'); };
+    // Thumbnail Drive kadang belum siap (file baru diupload, apalagi video).
+    // Tampilkan placeholder dulu, cek ulang di latar belakang (±4,5 menit),
+    // dan begitu siap otomatis diganti thumbnail asli.
+    var thumbStarted = false;
+    thumbEl.onerror = function(){
+      if (thumbStarted) return;
+      thumbStarted = true;
+      var ph = document.createElement('div');
+      ph.textContent = '🎞';
+      ph.title = 'Thumbnail sedang diproses Drive — klik untuk buka file';
+      ph.style.cssText = 'width:52px;height:52px;border-radius:6px;border:2px solid #74C69D;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;background:#F0FFF4;';
+      ph.onclick = function(){ window.open(url, '_blank'); };
+      if (thumbEl.parentNode) thumbEl.parentNode.replaceChild(ph, thumbEl);
+      var delays = [3000, 5000, 8000, 12000, 20000, 30000, 45000, 60000, 90000];
+      (function probe(i){
+        if (i >= delays.length) return;
+        setTimeout(function(){
+          if (!document.body.contains(ph)) return;   // item dihapus / dirender ulang -> stop
+          var probeImg = new Image();
+          probeImg.onload = function(){
+            if (!ph.parentNode) return;
+            thumbEl.onerror = null;
+            thumbEl.src = probeImg.src;
+            ph.parentNode.replaceChild(thumbEl, ph);
+          };
+          probeImg.onerror = function(){ probe(i + 1); };
+          probeImg.src = previewSrc + (previewSrc.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+        }, delays[i]);
+      })(0);
+    };
     wrap.appendChild(thumbEl);
 
     var delBtn = document.createElement('button');
@@ -1376,7 +1583,7 @@ function removeFoto(code, idx) {
   var total  = auditItems[code].fotoUrls.length;
   var status = document.getElementById('foto-status-' + code);
   var uploadLabels = document.querySelectorAll(
-    'label[for="foto-cam-' + code + '"], label[for="foto-input-' + code + '"]');
+    'label[for="foto-cam-' + code + '"], label[for="foto-vid-' + code + '"], label[for="foto-input-' + code + '"]');
   if (total === 0) {
     uploadLabels.forEach(function(l){ l.classList.remove('uploaded'); l.style.borderStyle = ''; });
   }
@@ -1386,6 +1593,11 @@ function removeFoto(code, idx) {
 
 // ── FOTO UPLOAD ───────────────────────────────────────────────
 async function handleFotoSelect(event, code) {
+  uploadsInFlight++;
+  try { await _handleFotoSelectInner(event, code); }
+  finally { uploadsInFlight--; if (!uploadsInFlight) clearPendingCapture(); }
+}
+async function _handleFotoSelectInner(event, code) {
   var files = Array.from(event.target.files);
   if (!files.length) return;
 
@@ -1398,19 +1610,18 @@ async function handleFotoSelect(event, code) {
     return;
   }
 
-  var MAX_MB_IMG = 50, MAX_MB_VIDEO = 20;
+  var MAX_MB_IMG = LIMIT_IMG_MB, MAX_MB_VIDEO = LIMIT_VIDEO_MB;
   var tooBig = files.filter(function(f){
     var limit = f.type.startsWith('video/') ? MAX_MB_VIDEO : MAX_MB_IMG;
     return f.size > limit * 1024 * 1024;
   });
   if (tooBig.length > 0) {
-    showError(tooBig.length + ' file kelewat besar (video maks ' + MAX_MB_VIDEO + 'MB, foto maks '
-      + MAX_MB_IMG + 'MB). Trim/kompres videonya dulu ya sebelum upload.');
+    showOversizeDialog(tooBig);
     files = files.filter(function(f){
       var limit = f.type.startsWith('video/') ? MAX_MB_VIDEO : MAX_MB_IMG;
       return f.size <= limit * 1024 * 1024;
     });
-    if (!files.length) return;
+    if (!files.length) { event.target.value = ''; return; }
   }
 
   var btn       = document.getElementById('foto-btn-' + code);
@@ -1419,7 +1630,7 @@ async function handleFotoSelect(event, code) {
   var tanggal   = auditInfo.tanggalAudit || new Date().toISOString().split('T')[0];
 
   var uploadLabels = document.querySelectorAll(
-    'label[for="foto-cam-' + code + '"], label[for="foto-input-' + code + '"]');
+    'label[for="foto-cam-' + code + '"], label[for="foto-vid-' + code + '"], label[for="foto-input-' + code + '"]');
   uploadLabels.forEach(function(l){
     l._origText = l.textContent;
     l.style.opacity = '0.5';
@@ -1433,13 +1644,11 @@ async function handleFotoSelect(event, code) {
     var file    = files[i];
     var isVideo = file.type.startsWith('video/');
 
-    var objectUrl = URL.createObjectURL(file);
     var tempEl = null;
     if (container) {
-      tempEl = document.createElement(isVideo ? 'video' : 'img');
-      tempEl.src = objectUrl;
-      tempEl.style.cssText = 'width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px dashed #74C69D;opacity:.6;';
-      if (isVideo) { tempEl.muted = true; tempEl.playsInline = true; }
+      tempEl = document.createElement('div');
+      tempEl.textContent = isVideo ? '🎬' : '🖼';
+      tempEl.style.cssText = 'width:52px;height:52px;border-radius:6px;border:2px dashed #74C69D;opacity:.7;display:flex;align-items:center;justify-content:center;font-size:22px;';
       container.appendChild(tempEl);
     }
     var sizeInfo = ' (' + (file.size / 1024 / 1024).toFixed(1) + 'MB)';
@@ -1460,7 +1669,7 @@ async function handleFotoSelect(event, code) {
       var result = await postJSON(APPS_SCRIPT_URL, {
         action: 'upload_photo', base64Data: dataUrl, fileName: fileName,
         nomorOutlet: auditInfo.nomorOutlet || 'doc', tanggal: tanggal
-      }, isVideo ? 180000 : 60000);
+      }, isVideo ? 300000 : 60000, isVideo ? 1 : 2);
 
       if (result.success) {
         auditItems[code].fotoUrls.push(result.url);
@@ -1473,7 +1682,6 @@ async function handleFotoSelect(event, code) {
       }
     } catch(e) {
       if (tempEl) tempEl.remove();
-      URL.revokeObjectURL(objectUrl);
       lastErrorMsg = e.name === 'AbortError'
         ? '⚠️ Timeout upload file ' + (i+1) + ' (koneksi terlalu lambat/putus)'
         : '⚠️ Gagal upload file ' + (i+1) + ': ' + (e.message||'').substring(0, 80);
@@ -1590,6 +1798,10 @@ function compressImage(file) {
 
 // ── SECTION NAV ───────────────────────────────────────────────
 function goToSection(idx) {
+  // idx >= jumlah section = halaman Tanda Tangan (langkah setelah section terakhir).
+  // Dulu tombol "Kembali Edit" di Review memanggil goToSection(9) -> screen-sec-undefined -> layar kosong.
+  if (idx >= SECTION_KEYS.length) { showSignatureScreen(); return; }
+  if (idx < 0) idx = 0;
   currentSectionIdx = idx;
   saveProgress();
   showScreen('screen-sec-' + SECTION_KEYS[idx]);
@@ -1700,6 +1912,10 @@ function formatScoreClient(n) {
 
 // ── REVIEW ────────────────────────────────────────────────────
 function showReview() {
+  // Tombol kirim di-disable saat submit & tidak pernah dinyalakan lagi setelah SUKSES
+  // (bug: Revisi / Audit Baru -> sampai Review -> tombol abu-abu). Nyalakan tiap Review dibuka.
+  const btnSubmit = document.getElementById('btn-final-submit');
+  if (btnSubmit) btnSubmit.disabled = false;
   const reviewContent = document.getElementById('review-content');
   const liveScores = calculateLiveScores();
   const gradeColors = { A:'#1B4332', B:'#2D6A4F', C:'#D97706', D:'#DC2626', F:'#7F1D1D' };
@@ -1740,7 +1956,7 @@ function showReview() {
     </div>
 
     <div style="background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:var(--shadow);">
-      ${['nomorOutlet','namaAuditor','tanggalAudit','posisiAuditor','kategoriAudit','statusKebun','emailPIC'].map(k => `
+      ${['nomorOutlet','namaAuditor','tanggalAudit','posisiAuditor','kategoriAudit','statusKebun','kategoriKebun','emailPIC'].map(k => `
         <div class="summary-item">
           <span class="summary-label">${k.replace(/([A-Z])/g,' $1').replace(/^./, s=>s.toUpperCase())}</span>
           <span class="summary-value">${auditInfo[k]||'-'}</span>
@@ -1784,6 +2000,20 @@ function showReview() {
 
 // ── FINAL SUBMIT ──────────────────────────────────────────────
 async function finalSubmit() {
+  if (!deteksiProvinsi(auditInfo.alamatKebun || '')) {
+    showError('Alamat Kebun belum mencantumkan provinsi. Lengkapi dulu di halaman Informasi Audit.');
+    showScreen('screen-info');
+    var fa = document.getElementById('f-alamat');
+    if (fa) { if (auditInfo.alamatKebun) fa.value = auditInfo.alamatKebun; fa.focus(); updateProvinsiHint(); }
+    return;
+  }
+  if (!auditInfo.kategoriKebun) {
+    showError('Kategori Kebun belum dipilih. Lengkapi dulu di halaman Informasi Audit.');
+    showScreen('screen-info');
+    var fk = document.getElementById('f-kategori-kebun');
+    if (fk) fk.focus();
+    return;
+  }
   document.getElementById('btn-final-submit').disabled = true;
   showScreen('screen-submit');
   updateSubmitProgress('Memproses data audit...');
@@ -1876,7 +2106,7 @@ function resetForm() {
   ITEMS.forEach(i => { auditItems[i.code] = { comply:true, catatan:'', fotoUrl:'' }; });
   document.getElementById('screen-sections').innerHTML = '';
 
-  ['f-outlet','f-nama-outlet','f-alamat','f-auditor','f-tanggal','f-posisi','f-status','f-kategori','f-email']
+  ['f-outlet','f-nama-outlet','f-alamat','f-auditor','f-tanggal','f-posisi','f-status','f-kategori-kebun','f-kategori','f-email']
     .forEach(function(id){
       var el = document.getElementById(id);
       if (el) el.value = '';
@@ -1976,6 +2206,134 @@ function confirmLoadLast() {
     showError('Gagal memuat: ' + e.message);
   }
 }
+
+// ================================================================
+//  MODAL, TIPS VIDEO, DIALOG FILE BESAR, PEMULIHAN SETELAH KAMERA
+// ================================================================
+function _modal(innerHTML) {
+  var o = document.createElement('div');
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:16px;padding:22px;max-width:340px;width:100%;max-height:90vh;overflow:auto;color:#111827;font-family:inherit;';
+  box.innerHTML = innerHTML;
+  o.appendChild(box);
+  document.body.appendChild(o);
+  return { overlay: o, box: box };
+}
+function _modalBtn(text, primary, onclick) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = text;
+  b.style.cssText = 'flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;'
+    + (primary ? 'border:none;background:#1B4332;color:#fff;' : 'border:1.5px solid #ccc;background:#fff;color:#111827;');
+  b.onclick = onclick;
+  return b;
+}
+
+// File melebihi batas: JANGAN hilang — kasih opsi simpan ke HP
+function showOversizeDialog(files) {
+  var old = document.getElementById('oversize-dialog');
+  if (old) old.remove();
+  var urls = [];
+  var m = _modal('<p style="font-weight:700;font-size:16px;margin-bottom:8px;">⚠️ File terlalu besar</p>'
+    + '<p style="font-size:13px;line-height:1.5;color:#4B5563;margin-bottom:12px;">Batas upload: video ' + LIMIT_VIDEO_MB
+    + ' MB, foto ' + LIMIT_IMG_MB + ' MB. <b>Rekamanmu belum hilang.</b> Kalau sudah ada di Galeri HP (mis. folder Camera), langsung potong (trim) di sana sampai di bawah batas, lalu pilih lewat tombol Galeri — tidak perlu simpan lagi. Tombol di bawah hanya kalau file-nya tidak muncul di Galeri.</p>');
+  m.overlay.id = 'oversize-dialog';
+  files.forEach(function(f, i) {
+    var url  = URL.createObjectURL(f); urls.push(url);
+    var name = f.name || ('rekaman_' + Date.now() + '_' + i + (f.type.indexOf('video') === 0 ? '.mp4' : '.jpg'));
+    var row  = document.createElement('div');
+    row.style.cssText = 'margin-bottom:10px;padding:10px;background:#F3F4F6;border-radius:10px;';
+    var label = document.createElement('div');
+    label.style.cssText = 'font-size:12px;color:#4B5563;margin-bottom:6px;word-break:break-all;';
+    label.textContent = name + ' · ' + (f.size / 1024 / 1024).toFixed(1) + ' MB';
+    var a = document.createElement('a');
+    a.href = url; a.download = name; a.textContent = '💾 Simpan ke HP (cadangan)';
+    a.style.cssText = 'display:inline-block;padding:9px 14px;background:#fff;color:#1B4332;border:1.5px solid #1B4332;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;';
+    row.appendChild(label); row.appendChild(a);
+    m.box.appendChild(row);
+  });
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;margin-top:6px;';
+  wrap.appendChild(_modalBtn('Tutup', false, function() {
+    m.overlay.remove();
+    setTimeout(function() { urls.forEach(function(u) { URL.revokeObjectURL(u); }); }, 60000);
+  }));
+  m.box.appendChild(wrap);
+}
+
+// Tips sebelum rekam video (sekali per sesi browser)
+function videoTipsSeen() { try { return sessionStorage.getItem('etika_vid_tips') === '1'; } catch(e) { return true; } }
+function showVideoTips(inputId) {
+  var m = _modal('<p style="font-weight:700;font-size:16px;margin-bottom:8px;">🎥 Sebelum rekam video</p>'
+    + '<ul style="font-size:13px;line-height:1.6;color:#374151;padding-left:18px;margin-bottom:14px;">'
+    + '<li>Batas upload: <b>' + LIMIT_VIDEO_MB + ' MB</b> per video.</li>'
+    + '<li>Perkiraan durasi: ±15 detik di 1080p, ±30 detik di 720p (beda-beda tiap HP). Di 4K hanya beberapa detik.</li>'
+    + '<li>Set resolusi video kamera ke <b>HD 720p</b> dulu, dan rekam per bagian (beberapa video pendek lebih aman).</li>'
+    + '<li>Di sebagian HP (mis. Samsung), video dari kamera ikut tersimpan di Galeri — hapus setelah audit selesai supaya penyimpanan tidak penuh.</li>'
+    + '<li>Kalau kelewat batas, videomu tidak hilang — nanti ada petunjuk untuk memotongnya.</li></ul>');
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:8px;';
+  wrap.appendChild(_modalBtn('Batal', false, function() { m.overlay.remove(); }));
+  wrap.appendChild(_modalBtn('Mengerti, buka kamera', true, function() {
+    try { sessionStorage.setItem('etika_vid_tips', '1'); } catch(e) {}
+    m.overlay.remove();
+    var inp = document.getElementById(inputId);
+    if (inp) {
+      setPendingCapture(inputId.replace(/^foto-(cam|vid|input)-/, ''));
+      inp.click();
+    }
+  }));
+  m.box.appendChild(wrap);
+}
+
+// Tandai item yang sedang dikerjakan sebelum kamera/galeri dibuka
+document.addEventListener('click', function(e) {
+  var lb = e.target && e.target.closest ? e.target.closest('label.foto-btn[for]') : null;
+  if (!lb) return;
+  var forId = lb.getAttribute('for') || '';
+  var m = forId.match(/^foto-(cam|vid|input)-(.+)$/);
+  if (!m) return;
+  if (m[1] === 'vid' && !videoTipsSeen()) {
+    e.preventDefault();
+    showVideoTips(forId);
+    return;
+  }
+  setPendingCapture(m[2]);
+}, true);
+
+// Kalau tab kembali aktif dan tidak ada upload berjalan, tandai tidak jadi ambil foto
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible') {
+    setTimeout(function() { if (!uploadsInFlight) clearPendingCapture(); }, 3000);
+  }
+});
+
+// Pemulihan: Chrome menutup tab saat kamera terbuka (memori HP penuh)
+function scrollToCaptureTarget(t) {
+  var el = document.getElementById('card-' + t) || document.getElementById('foto-btn-' + t);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+}
+function checkCaptureRecovery() {
+  var p     = readPendingCapture();
+  var saved = loadProgress();
+  if (!p || !saved || !saved.auditInfo || !saved.auditInfo.nomorOutlet) return;
+  var outlet = String(saved.auditInfo.nomorOutlet).replace(/[^0-9A-Za-z\-]/g, '');
+  var m = _modal('<p style="font-weight:700;font-size:16px;margin-bottom:8px;">⚠️ Halaman ter-restart</p>'
+    + '<p style="font-size:13px;line-height:1.5;color:#4B5563;margin-bottom:8px;">HP kehabisan memori saat kamera dibuka, jadi Chrome menutup form ini. <b>Progress audit kamu aman</b> (outlet ' + outlet + ').</p>'
+    + '<p style="font-size:13px;line-height:1.5;color:#4B5563;margin-bottom:14px;">Foto/video yang barusan diambil <b>belum masuk</b>. Ambil ulang, atau kalau sudah ada di galeri HP, pilih lewat tombol Galeri.</p>');
+  window._restoreBanner = m.overlay;
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:8px;';
+  wrap.appendChild(_modalBtn('Mulai Baru', false, function() { clearPendingCapture(); discardProgress(); }));
+  wrap.appendChild(_modalBtn('Lanjutkan', true, function() {
+    clearPendingCapture();
+    restoreProgress();
+    setTimeout(function() { scrollToCaptureTarget(p.target); }, 300);
+  }));
+  m.box.appendChild(wrap);
+}
+checkCaptureRecovery();
 </script>
 </body>
 </html>
